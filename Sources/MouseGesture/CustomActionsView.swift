@@ -15,7 +15,7 @@ struct CustomActionsView: View {
                 Text("手势").frame(width: ActionRowLayout.gestureWidth)
                 Text("操作").frame(width: ActionRowLayout.actionWidth, alignment: .trailing)
             }.font(.caption).foregroundStyle(.secondary)
-            ForEach(actions.filter { action in !state.customDrafts.contains { $0.id == action.id } }) { action in
+            ForEach(actions.filter { action in !state.draftModels.contains { $0.id == action.id } }) { action in
                 HStack(spacing: ActionRowLayout.spacing) {
                     Text(action.name).frame(maxWidth: .infinity, alignment: .leading)
                         .lineLimit(1).help(action.name)
@@ -52,8 +52,8 @@ struct CustomActionsView: View {
                         .layoutPriority(1)
                 }
             }
-            ForEach($state.customDrafts) { $draft in
-                CustomActionEditorView(state: state, preferences: preferences, draft: $draft)
+            ForEach(state.draftModels) { model in
+                CustomActionEditorView(state: state, preferences: preferences, model: model)
             }
         } header: {
             HStack {
@@ -83,14 +83,15 @@ struct CustomActionsView: View {
 private struct CustomActionEditorView: View {
     @ObservedObject var state: AppState
     @ObservedObject var preferences: Preferences
-    @Binding var draft: CustomActionDraft
+    @ObservedObject var model: CustomActionDraftModel
+    private var draft: CustomActionDraft {
+        get { model.value }
+        nonmutating set { model.value = newValue }
+    }
     private var isActive: Bool { state.customDraft?.id == draft.id }
     private var recordingShortcut: Bool { isActive && state.recordingCustomShortcut }
     @State private var recordingGesture = false
-    private var canSave: Bool {
-        preferences.validationError(for: draft) == nil && !recordingShortcut && !recordingGesture
-    }
-    private var saveHint: String {
+    private func saveHint(validationError: String?) -> String {
         if recordingShortcut { return "未保存 · 请先完成快捷键录入。" }
         if recordingGesture { return "未保存 · 请先完成手势录制。" }
         if draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -98,14 +99,17 @@ private struct CustomActionEditorView: View {
         }
         if draft.shortcut == nil { return "未保存 · 下一步：录入快捷键。" }
         if draft.directions.isEmpty { return "未保存 · 下一步：录制手势。" }
-        if preferences.validationError(for: draft) != nil { return "未保存 · 请先解决上方提示。" }
+        if validationError != nil { return "未保存 · 请先解决上方提示。" }
         return "待保存 · 点击“保存”后，这条自定义功能才会启用。"
     }
 
     var body: some View {
+        let validationError = preferences.validationError(for: draft)
+        let canSave = validationError == nil && !recordingShortcut && !recordingGesture
+        let saveHint = saveHint(validationError: validationError)
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: ActionRowLayout.spacing) {
-                TextField("输入功能名称", text: $draft.name)
+                TextField("输入功能名称", text: $model.value.name)
                     .labelsHidden().textFieldStyle(.roundedBorder)
                     .frame(maxWidth: .infinity).accessibilityLabel("自定义功能名称")
                     .onTapGesture { if !isActive { state.stopRecording() } }
@@ -180,7 +184,7 @@ private struct CustomActionEditorView: View {
                 .accessibilityLabel("自定义功能的手势录制区域")
                 Button("收起录制区域") { finishGestureRecording() }
             }
-            if let error = draft.gestureError ?? validationFeedback(draft) {
+            if let error = draft.gestureError ?? (draft.directions.isEmpty ? nil : validationError) {
                 Label(error, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)
             }
             Label(saveHint, systemImage: canSave ? "checkmark.circle" : "pencil.circle")
@@ -210,10 +214,5 @@ private struct CustomActionEditorView: View {
             state.lastResult = "已保存自定义功能：\(draft.name.trimmingCharacters(in: .whitespacesAndNewlines))"
             state.removeCustomDraft(candidate.id)
         }
-    }
-
-    private func validationFeedback(_ draft: CustomActionDraft) -> String? {
-        guard !draft.directions.isEmpty else { return nil }
-        return preferences.validationError(for: draft)
     }
 }

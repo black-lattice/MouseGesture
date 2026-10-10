@@ -5,34 +5,57 @@ import Combine
 final class AppState: ObservableObject {
     let preferences: Preferences
     lazy var monitor = GestureMonitor(preferences: preferences)
-    @Published var trusted = AXIsProcessTrusted()
+    @Published var trusted: Bool
     @Published var running = false
     @Published var lastResult = "按住右键绘制，松开执行操作"
     @Published var gestureRecordingAction: GestureAction?
-    @Published var customDrafts: [CustomActionDraft] = []
+    @Published private(set) var draftModels: [CustomActionDraftModel] = []
+    var customDrafts: [CustomActionDraft] {
+        get { draftModels.map(\.value) }
+        set {
+            let existing = Dictionary(uniqueKeysWithValues: draftModels.map { ($0.id, $0) })
+            let models = newValue.map { value -> CustomActionDraftModel in
+                guard let model = existing[value.id] else { return CustomActionDraftModel(value) }
+                if model.value != value { model.value = value }
+                return model
+            }
+            if models.map(\.id) != draftModels.map(\.id) { draftModels = models }
+        }
+    }
     @Published private var activeCustomDraftID: UUID?
     var customDraft: CustomActionDraft? {
-        get { customDrafts.first { $0.id == activeCustomDraftID } }
+        get { draftModels.first { $0.id == activeCustomDraftID }?.value }
         set {
             if let draft = newValue {
-                if let index = customDrafts.firstIndex(where: { $0.id == draft.id }) { customDrafts[index] = draft }
-                else { customDrafts.append(draft) }
+                if let model = draftModels.first(where: { $0.id == draft.id }) {
+                    if model.value != draft { model.value = draft }
+                } else { draftModels.append(CustomActionDraftModel(draft)) }
             }
-            activeCustomDraftID = newValue?.id
+            if activeCustomDraftID != newValue?.id { activeCustomDraftID = newValue?.id }
         }
     }
     @Published var recordingCustomShortcut = false
     private var timer: Timer?
+    private var enabledSubscription: AnyCancellable?
+    private var hasStarted = false
+    private var sleeping = false
+    private var sessionActive = true
     private var keyboardMonitor: Any?
     private let shortcutRecorder: ShortcutRecorder
+    private let permissionCheck: () -> Bool
 
-    init(preferences: Preferences = Preferences(), usesSystemShortcutCapture: Bool = true) {
+    init(preferences: Preferences = Preferences(), usesSystemShortcutCapture: Bool = true,
+         permissionCheck: @escaping () -> Bool = { AXIsProcessTrusted() }) {
         self.preferences = preferences
+        self.permissionCheck = permissionCheck
+        trusted = permissionCheck()
         shortcutRecorder = ShortcutRecorder(usesSystemCapture: usesSystemShortcutCapture)
         ensureCustomDraft()
     }
 
     func start() {
+        guard !hasStarted else { return }
+        hasStarted = true
         monitor.onStatus = { [weak self] in self?.lastResult = $0 }
         monitor.onRecognized = { [weak self] directions, pid in
             guard let self, self.preferences.enabled,
@@ -45,26 +68,67 @@ final class AppState: ObservableObject {
             }
         }
         refreshPermission()
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refreshPermission() }
+        enabledSubscription = preferences.$enabled.dropFirst().removeDuplicates().sink { [weak self] enabled in
+            self?.refreshPermission(enabled: enabled)
+        }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(suspend),
                                                           name: NSWorkspace.willSleepNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(suspend),
                                                           name: NSWorkspace.sessionDidResignActiveNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(resume),
+                                                          name: NSWorkspace.didWakeNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(resume),
+                                                          name: NSWorkspace.sessionDidBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationActivated),
+                                               name: NSApplication.didBecomeActiveNotification, object: nil)
     }
 
-    @objc private func suspend() { stopRecording(); monitor.cancel() }
+    @objc private func suspend(_ notification: Notification) {
+        if notification.name == NSWorkspace.willSleepNotification { sleeping = true }
+        if notification.name == NSWorkspace.sessionDidResignActiveNotification { sessionActive = false }
+        timer?.invalidate()
+        timer = nil
+        stopRecording()
+        monitor.stop()
+        if running { running = false }
+    }
 
-    func refreshPermission() {
-        let permission = AXIsProcessTrusted()
+    @objc private func resume(_ notification: Notification) {
+        if notification.name == NSWorkspace.didWakeNotification { sleeping = false }
+        if notification.name == NSWorkspace.sessionDidBecomeActiveNotification { sessionActive = true }
+        refreshPermission()
+    }
+
+    @objc private func applicationActivated() { refreshPermission() }
+
+    func refreshPermission(enabled: Bool? = nil) {
+        let permission = permissionCheck()
         if trusted != permission { trusted = permission }
         let listening: Bool
-        if permission {
+        let shouldListen = (enabled ?? preferences.enabled) && !sleeping && sessionActive
+        if permission && shouldListen {
             listening = monitor.start()
         } else {
             monitor.stop()
             listening = false
         }
         if running != listening { running = listening }
+        updatePermissionTimer(listening: permission && listening, enabled: shouldListen)
+    }
+
+    private func updatePermissionTimer(listening: Bool, enabled: Bool) {
+        // Retry grants promptly; a healthy listener needs only an occasional permission check.
+        let interval: TimeInterval? = hasStarted && enabled ? (listening ? 30 : 2) : nil
+        if timer?.timeInterval != interval {
+            timer?.invalidate()
+            timer = interval.map { seconds in
+                let timer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: true) { [weak self] _ in
+                    self?.refreshPermission()
+                }
+                timer.tolerance = seconds == 30 ? 5 : 0.5
+                return timer
+            }
+        }
     }
 
     func requestPermission() {
@@ -169,16 +233,21 @@ final class AppState: ObservableObject {
         shortcutRecorder.stop()
         if let keyboardMonitor { NSEvent.removeMonitor(keyboardMonitor) }
         keyboardMonitor = nil
-        gestureRecordingAction = nil
+        if gestureRecordingAction != nil { gestureRecordingAction = nil }
         customDraft = nil
-        recordingCustomShortcut = false
+        if recordingCustomShortcut { recordingCustomShortcut = false }
         monitor.suspended = false
     }
 
     func stop() {
+        hasStarted = false
         timer?.invalidate()
+        timer = nil
+        enabledSubscription = nil
         stopRecording()
         monitor.stop()
+        if running { running = false }
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        NotificationCenter.default.removeObserver(self)
     }
 }

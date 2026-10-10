@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func updateMenu() {
         let menu = NSMenu()
-        let title = state.running ? (state.preferences.enabled ? "手势运行中" : "手势已暂停") : "等待授权 / 监听不可用"
+        let title = !state.preferences.enabled ? "手势已暂停" : (state.running ? "手势运行中" : "等待授权 / 监听不可用")
         let status = menu.addItem(withTitle: title, action: nil, keyEquivalent: "")
         status.isEnabled = false
         menu.addItem(.separator())

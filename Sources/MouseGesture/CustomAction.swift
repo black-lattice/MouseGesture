@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import GestureCore
 
 struct CustomAction: Identifiable, Codable, Equatable {
@@ -10,7 +11,7 @@ struct CustomAction: Identifiable, Codable, Equatable {
     var arrows: String { directions.map(\.arrow).joined(separator: " ") }
 }
 
-struct CustomActionDraft: Identifiable {
+struct CustomActionDraft: Identifiable, Equatable {
     var id: UUID
     var name: String
     var shortcut: KeyboardShortcut?
@@ -23,5 +24,16 @@ struct CustomActionDraft: Identifiable {
         name = action?.name ?? ""
         shortcut = action?.shortcut
         directions = action?.directions ?? []
+    }
+}
+
+// Publish edits only to the row that owns this draft, not the entire settings form.
+final class CustomActionDraftModel: ObservableObject, Identifiable {
+    let id: UUID
+    @Published var value: CustomActionDraft
+
+    init(_ value: CustomActionDraft) {
+        id = value.id
+        self.value = value
     }
 }

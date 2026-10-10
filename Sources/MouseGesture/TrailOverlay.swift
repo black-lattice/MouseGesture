@@ -11,7 +11,7 @@ final class TrailOverlay {
             view.points = points.map { CGPoint(x: $0.x - panel.frame.minX, y: primaryTop - $0.y - panel.frame.minY) }
             view.label = label
             view.needsDisplay = true
-            panel.orderFrontRegardless()
+            if !panel.isVisible { panel.orderFrontRegardless() }
         }
     }
 
