@@ -4,7 +4,7 @@ enum ActionRowLayout {
     static let spacing: CGFloat = 12
     static let shortcutWidth: CGFloat = 128
     static let gestureWidth: CGFloat = 120
-    static let actionWidth: CGFloat = 72
+    static let actionWidth: CGFloat = 144
 }
 
 struct ActionListView: View {

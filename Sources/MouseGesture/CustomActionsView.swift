@@ -14,7 +14,7 @@ struct CustomActionsView: View {
                 Text("名称").frame(maxWidth: .infinity, alignment: .leading)
                 Text("快捷键").frame(width: ActionRowLayout.shortcutWidth)
                 Text("手势").frame(width: ActionRowLayout.gestureWidth)
-                Color.clear.frame(width: ActionRowLayout.actionWidth, height: 1).accessibilityHidden(true)
+                Text("操作").frame(width: ActionRowLayout.actionWidth, alignment: .trailing)
             }.font(.caption).foregroundStyle(.secondary)
             ForEach(actions.filter { action in !state.customDrafts.contains { $0.id == action.id } }) { action in
                 HStack(spacing: ActionRowLayout.spacing) {
@@ -27,20 +27,23 @@ struct CustomActionsView: View {
                         Text(action.pattern.isEmpty ? "录制手势" : action.arrows)
                             .font(.system(.body, design: .monospaced)).frame(maxWidth: .infinity)
                     }.frame(width: ActionRowLayout.gestureWidth).accessibilityLabel("编辑\(action.name)手势")
-                    Menu {
-                        Button("编辑") { state.editCustomAction(action) }
-                        Button("清除手势") {
-                            state.stopRecording()
-                            preferences.clearCustomGesture(action.id)
-                        }.disabled(action.pattern.isEmpty)
-                        Button("删除…", role: .destructive) {
-                            state.stopRecording()
-                            pendingDeletion = action
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                    }.frame(width: 36).frame(width: ActionRowLayout.actionWidth, alignment: .trailing)
-                        .accessibilityLabel("\(action.name)的更多操作")
+                    HStack(spacing: 8) {
+                        Text("已保存").font(.caption).foregroundStyle(.secondary)
+                        Menu {
+                            Button("编辑") { state.editCustomAction(action) }
+                            Button("清除手势") {
+                                state.stopRecording()
+                                preferences.clearCustomGesture(action.id)
+                            }.disabled(action.pattern.isEmpty)
+                            Button("删除…", role: .destructive) {
+                                state.stopRecording()
+                                pendingDeletion = action
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                        }.frame(width: 36)
+                            .accessibilityLabel("\(action.name)的更多操作")
+                    }.frame(width: ActionRowLayout.actionWidth, alignment: .trailing)
                 }
             }
             ForEach($state.customDrafts) { $draft in
@@ -79,6 +82,20 @@ private struct CustomActionEditorView: View {
     private var isActive: Bool { state.customDraft?.id == draft.id }
     private var recordingShortcut: Bool { isActive && state.recordingCustomShortcut }
     @State private var recordingGesture = false
+    private var canSave: Bool {
+        preferences.validationError(for: draft) == nil && !recordingShortcut && !recordingGesture
+    }
+    private var saveHint: String {
+        if recordingShortcut { return "未保存 · 请先完成快捷键录入。" }
+        if recordingGesture { return "未保存 · 请先完成手势录制。" }
+        if draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "未保存 · 填写名称、录入快捷键并录制手势后，点击“保存”。"
+        }
+        if draft.shortcut == nil { return "未保存 · 下一步：录入快捷键。" }
+        if draft.directions.isEmpty { return "未保存 · 下一步：录制手势。" }
+        if preferences.validationError(for: draft) != nil { return "未保存 · 请先解决上方提示。" }
+        return "待保存 · 点击“保存”后，这条自定义功能才会启用。"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -111,15 +128,21 @@ private struct CustomActionEditorView: View {
                 .accessibilityLabel("录制自定义手势")
                 .help("点击展开手势录制区域")
                 HStack(spacing: 8) {
-                    Button("保存") { save(draft) }
-                        .frame(width: 36)
-                        .disabled(preferences.validationError(for: draft) != nil || recordingShortcut || recordingGesture)
+                    Button { save(draft) } label: {
+                        Text("保存").frame(minWidth: 32).fixedSize(horizontal: true, vertical: false)
+                    }
+                        .buttonStyle(.borderedProminent).tint(.teal)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .disabled(!canSave)
                         .accessibilityLabel("保存自定义功能并生效")
+                        .help(saveHint)
                     Button { state.removeCustomDraft(draft.id) } label: {
-                        Image(systemName: "trash").frame(width: 24, height: 24)
-                    }.buttonStyle(.borderless).foregroundStyle(.secondary)
+                        Text("删除").frame(minWidth: 32).fixedSize(horizontal: true, vertical: false)
+                    }.buttonStyle(.bordered).fixedSize(horizontal: true, vertical: false)
                         .accessibilityLabel("移除此行草稿").help("放弃此行未保存的内容")
-                }.frame(width: ActionRowLayout.actionWidth, alignment: .trailing)
+                }.fixedSize(horizontal: true, vertical: false)
+                    .frame(width: ActionRowLayout.actionWidth, alignment: .trailing)
+                    .layoutPriority(1)
             }
             if recordingShortcut {
                 HStack {
@@ -132,7 +155,7 @@ private struct CustomActionEditorView: View {
                 Label(error, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)
             }
             if recordingGesture {
-                Text("在下方区域按住右键绘制，支持上下左右直线或最多四段折线。录制成功后点击本行“保存”生效。")
+                Text("在下方区域按住右键绘制，支持上下左右直线或最多四段折线。录制成功后点击本行“保存”启用。")
                     .font(.callout).foregroundStyle(.secondary)
                 GestureRecordingPad(minimumLength: preferences.minimumLength, onStart: {
                     state.stopCustomShortcutRecording()
@@ -155,6 +178,8 @@ private struct CustomActionEditorView: View {
             if let error = draft.gestureError ?? validationFeedback(draft) {
                 Label(error, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)
             }
+            Label(saveHint, systemImage: canSave ? "checkmark.circle" : "pencil.circle")
+                .font(.caption).foregroundStyle(canSave ? Color.teal : Color.secondary)
         }
         .onChange(of: isActive) { active in
             if !active { recordingGesture = false }
