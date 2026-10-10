@@ -34,6 +34,38 @@ finally:
     subprocess.run([sys.argv[1], suite, "cleanup"], check=True)
 PY
 
+# A bare executable has no app bundle ID, so it cannot catch installed-app startup bugs.
+# Compile the production convenience initializer and run it in a real .app as well.
+cat Sources/GestureCore/GestureRecognizer.swift > "$CHECK_DIR/startup.swift"
+sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,Preferences}.swift >> "$CHECK_DIR/startup.swift"
+cat Tests/PreferencesStartupTests.swift >> "$CHECK_DIR/startup.swift"
+xcrun swiftc -O "$CHECK_DIR/startup.swift" -o "$CHECK_DIR/startup"
+python3 - "$CHECK_DIR/startup" "$CHECK_DIR" <<'PY'
+import os
+import plistlib
+import shutil
+import subprocess
+import sys
+import uuid
+
+domain = "MouseGesture.StartupTests." + str(uuid.uuid4())
+app = os.path.join(sys.argv[2], "Startup.app", "Contents")
+os.makedirs(os.path.join(app, "MacOS"))
+installed = os.path.join(app, "MacOS", "Startup")
+shutil.copy2(sys.argv[1], installed)
+with open(os.path.join(app, "Info.plist"), "wb") as file:
+    plistlib.dump({"CFBundleIdentifier": domain, "CFBundleExecutable": "Startup",
+                  "CFBundlePackageType": "APPL"}, file)
+try:
+    for binary, mode in [(sys.argv[1], "write"), (installed, "installed"),
+                         (sys.argv[1], "read"), (sys.argv[1], "cleanup"),
+                         (installed, "fresh")]:
+        subprocess.run([binary, domain, mode], check=True)
+    print("安装版配置初始化与共享测试通过：5 个阶段")
+finally:
+    subprocess.run([sys.argv[1], domain, "cleanup"], check=True)
+PY
+
 # Exercise native recording events in a hidden test window, without posting system events.
 cat Sources/GestureCore/GestureRecognizer.swift > "$CHECK_DIR/recording.swift"
 sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,Preferences,ShortcutRecorder,AppState,ActionExecutor,GestureMonitor,TrailOverlay,GestureRecordingView}.swift >> "$CHECK_DIR/recording.swift"

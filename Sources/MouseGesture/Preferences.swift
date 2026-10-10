@@ -31,15 +31,22 @@ final class Preferences: ObservableObject {
         var customActions: [CustomAction]?
     }
 
-    convenience init() {
-        // Swift Package executables and installed apps must share one preference domain.
-        self.init(defaults: UserDefaults(suiteName: Self.domain)!, legacyDefaults: UserDefaults(suiteName: "MouseGesture"))
+    convenience init(domain: String = Preferences.domain, legacyDomain: String? = "MouseGesture") {
+        // The installed app's domain is its bundle ID: suiteName rejects that ID.
+        // Package executables use a suite to reach the same settings instead.
+        self.init(defaults: Self.defaults(for: domain),
+                  legacyDefaults: legacyDomain.map { Self.defaults(for: $0) })
+    }
+
+    private static func defaults(for domain: String) -> UserDefaults {
+        if Bundle.main.bundleIdentifier == domain { return .standard }
+        return UserDefaults(suiteName: domain) ?? .standard
     }
 
     init(defaults: UserDefaults, legacyDefaults: UserDefaults? = nil) {
         self.defaults = defaults
         let needsMigration = legacyDefaults != nil && !defaults.bool(forKey: "preferences.legacyMigrated.v1")
-        let legacy = needsMigration ? Self.read(from: legacyDefaults!) : nil
+        let legacy = needsMigration ? legacyDefaults.flatMap { Self.read(from: $0) } : nil
         if let value = Self.read(from: defaults) ?? legacy {
             enabled = value.enabled
             showTrail = value.showTrail
