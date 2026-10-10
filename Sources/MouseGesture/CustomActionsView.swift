@@ -5,7 +5,6 @@ struct CustomActionsView: View {
     @ObservedObject var state: AppState
     @ObservedObject var preferences: Preferences
     let actions: [CustomAction]
-    let onSaved: () -> Void
     @State private var pendingDeletion: CustomAction?
 
     var body: some View {
@@ -47,7 +46,7 @@ struct CustomActionsView: View {
                 }
             }
             ForEach($state.customDrafts) { $draft in
-                CustomActionEditorView(state: state, preferences: preferences, draft: $draft, onSaved: onSaved)
+                CustomActionEditorView(state: state, preferences: preferences, draft: $draft)
             }
         } header: {
             HStack {
@@ -78,7 +77,6 @@ private struct CustomActionEditorView: View {
     @ObservedObject var state: AppState
     @ObservedObject var preferences: Preferences
     @Binding var draft: CustomActionDraft
-    let onSaved: () -> Void
     private var isActive: Bool { state.customDraft?.id == draft.id }
     private var recordingShortcut: Bool { isActive && state.recordingCustomShortcut }
     @State private var recordingGesture = false
@@ -204,7 +202,6 @@ private struct CustomActionEditorView: View {
         } else {
             state.lastResult = "已保存自定义功能：\(draft.name.trimmingCharacters(in: .whitespacesAndNewlines))"
             state.removeCustomDraft(candidate.id)
-            onSaved()
         }
     }
 

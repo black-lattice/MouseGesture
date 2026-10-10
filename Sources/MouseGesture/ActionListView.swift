@@ -52,10 +52,7 @@ struct ActionListView: View {
         .onChange(of: query) { _ in state.stopRecording() }
         .onChange(of: category) { _ in state.stopRecording() }
 
-        CustomActionsView(state: state, preferences: preferences, actions: customActions) {
-            query = ""
-            category = .custom
-        }
+        CustomActionsView(state: state, preferences: preferences, actions: customActions)
 
         ForEach(ActionCategory.allCases) { section in
             let matches = actions.filter { $0.category == section }
