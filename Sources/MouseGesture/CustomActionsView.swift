@@ -26,18 +26,20 @@ struct CustomActionsView: View {
                         Text(action.pattern.isEmpty ? "录制手势" : action.arrows)
                             .font(.system(.body, design: .monospaced)).frame(maxWidth: .infinity)
                     }.frame(width: ActionRowLayout.gestureWidth).accessibilityLabel("编辑\(action.name)手势")
-                        .help("点击编辑手势；右键可清除手势")
-                        .contextMenu {
-                            Button("清除手势") {
-                                state.stopRecording()
-                                preferences.clearCustomGesture(action.id)
-                            }.disabled(action.pattern.isEmpty)
-                        }
+                        .help("点击编辑手势")
                     HStack(spacing: 8) {
                         Button { state.editCustomAction(action) } label: {
                             Text("编辑").frame(minWidth: 32).fixedSize(horizontal: true, vertical: false)
                         }.buttonStyle(.bordered).fixedSize(horizontal: true, vertical: false)
                             .accessibilityLabel("编辑\(action.name)")
+                        Button {
+                            state.stopRecording()
+                            preferences.clearCustomGesture(action.id)
+                        } label: {
+                            Text("清除手势").fixedSize(horizontal: true, vertical: false)
+                        }.buttonStyle(.bordered).fixedSize(horizontal: true, vertical: false)
+                            .disabled(action.pattern.isEmpty)
+                            .accessibilityLabel("清除\(action.name)手势")
                         Button(role: .destructive) {
                             state.stopRecording()
                             pendingDeletion = action

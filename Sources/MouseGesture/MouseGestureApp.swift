@@ -81,11 +81,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func showSettings() {
         if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 790),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 840, height: 790),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             window.title = "MouseGesture 设置"
             window.contentView = NSHostingView(rootView: SettingsView(state: state, preferences: state.preferences))
-            window.minSize = NSSize(width: 640, height: 680)
+            window.minSize = NSSize(width: 760, height: 680)
             window.isReleasedWhenClosed = false
             window.delegate = self
             window.center()

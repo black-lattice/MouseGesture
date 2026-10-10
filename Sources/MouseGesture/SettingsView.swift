@@ -57,7 +57,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
         }
-        .frame(minWidth: 620, minHeight: 660)
+        .frame(minWidth: 740, minHeight: 660)
         .alert("重置手势和快捷键？", isPresented: $confirmReset) {
             Button("取消", role: .cancel) {}
             Button("重置", role: .destructive) { state.stopRecording(); preferences.restoreDefaults() }

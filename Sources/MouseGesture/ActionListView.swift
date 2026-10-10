@@ -4,7 +4,7 @@ enum ActionRowLayout {
     static let spacing: CGFloat = 12
     static let shortcutWidth: CGFloat = 128
     static let gestureWidth: CGFloat = 120
-    static let actionWidth: CGFloat = 144
+    static let actionWidth: CGFloat = 208
 }
 
 struct ActionListView: View {
@@ -109,11 +109,14 @@ struct ActionListView: View {
             .disabled(state.gestureRecordingAction == action)
             .accessibilityLabel("录制\(action.title)手势")
             .help(gesture.isEmpty ? "点击录制手势" : "当前手势：\(gesture)，点击重新录制")
-            Button("清除") {
+            Button {
                 state.stopRecording()
                 preferences.clearGesture(for: action)
+            } label: {
+                Text("清除").frame(minWidth: 32).fixedSize(horizontal: true, vertical: false)
             }
-            .frame(width: 36).frame(width: ActionRowLayout.actionWidth, alignment: .trailing).disabled(gesture.isEmpty)
+            .buttonStyle(.bordered).fixedSize(horizontal: true, vertical: false)
+            .frame(width: ActionRowLayout.actionWidth, alignment: .trailing).disabled(gesture.isEmpty)
             .accessibilityLabel("清除\(action.title)手势")
         }
     }
