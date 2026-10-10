@@ -10,20 +10,42 @@ enum ActionExecutor {
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else {
             return "前台应用已切换，本次手势已取消"
         }
+        guard action.isAvailable(in: NSWorkspace.shared.frontmostApplication?.bundleIdentifier) else {
+            return "请先切换到访达，再使用“\(action.title)”"
+        }
         if action == .closeWindow { return closeWindow(pid: targetPID) }
-        let shortcut = preferences.shortcut(for: action)
+        guard let shortcut = preferences.shortcut(for: action) else { return "此功能未设置快捷键" }
+        return send(shortcut, title: action.title, targetPID: targetPID)
+    }
+
+    static func execute(_ action: CustomAction, targetPID: pid_t) -> String {
+        send(action.shortcut, title: action.name, targetPID: targetPID)
+    }
+
+    private static func send(_ shortcut: KeyboardShortcut, title: String, targetPID: pid_t) -> String {
+        guard AXIsProcessTrusted() else { return "辅助功能权限不可用" }
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else {
+            return "前台应用已切换，本次手势已取消"
+        }
+        guard let events = makeShortcutEvents(shortcut) else { return "无法创建快捷键事件" }
+        // Session events reach system shortcuts as well as the active application.
+        events.forEach { $0.post(tap: .cgSessionEventTap) }
+        return "已发送：\(title)（\(shortcut.label)）"
+    }
+
+    static func makeShortcutEvents(_ shortcut: KeyboardShortcut) -> [CGEvent]? {
         guard let source = CGEventSource(stateID: .privateState),
               let down = CGEvent(keyboardEventSource: source, virtualKey: shortcut.keyCode, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: shortcut.keyCode, keyDown: false) else {
-            return "无法创建快捷键事件"
+            return nil
         }
         for event in [down, up] {
-            event.flags = CGEventFlags(rawValue: shortcut.modifiers)
+            // F-keys and arrows carry intrinsic flags required by system shortcuts.
+            let keyFlags = event.flags.intersection([.maskSecondaryFn, .maskNumericPad])
+            event.flags = CGEventFlags(rawValue: shortcut.modifiers).union(keyFlags)
             event.setIntegerValueField(.eventSourceUserData, value: eventTag)
-            // Session events reach system shortcuts as well as the active application.
-            event.post(tap: .cgSessionEventTap)
         }
-        return "已发送：\(action.title)（\(shortcut.label)）"
+        return [down, up]
     }
 
     private static func closeWindow(pid: pid_t) -> String {

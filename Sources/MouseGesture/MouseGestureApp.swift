@@ -96,7 +96,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) { state.stopRecording() }
-    func windowWillClose(_ notification: Notification) { state.stopRecording() }
+    func windowWillClose(_ notification: Notification) {
+        state.resetCustomDrafts()
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationWillTerminate(_ notification: Notification) { state.stop() }
 }

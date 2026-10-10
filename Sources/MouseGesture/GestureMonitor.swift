@@ -104,7 +104,7 @@ final class GestureMonitor {
                     guard let self, self.stroke != nil else { return }
                     let directions = current.recognize(minimumLength: self.preferences.minimumLength)
                     let label = directions.map { sequence in
-                        sequence.map(\.arrow).joined() + "  " + self.preferences.action(for: sequence).title
+                        sequence.map(\.arrow).joined() + "  " + self.preferences.title(for: sequence)
                     } ?? "继续绘制 · 松开结束 · Esc 取消"
                     self.overlay.show(points: current.points, label: label)
                 }

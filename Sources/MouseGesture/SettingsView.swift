@@ -34,21 +34,7 @@ struct SettingsView: View {
                     }
                     LabeledContent("最近操作", value: state.lastResult)
                 }
-                Section {
-                    ForEach($preferences.bindings) { $binding in
-                        Picker(selection: $binding.action) {
-                            ForEach(GestureAction.allCases) { action in Text(action.title).tag(action) }
-                        } label: {
-                            Text(binding.arrows).font(.system(size: 20, weight: .medium, design: .monospaced))
-                                .frame(width: 72, alignment: .leading)
-                                .accessibilityLabel("手势 \(binding.arrows)")
-                        }
-                    }
-                } header: {
-                    Text("手势绑定")
-                } footer: {
-                    Text("按住右键画出直线或折线，松开执行。操作作用于当前前台应用；关闭标签页在无标签页的应用中可能关闭当前文稿或窗口。")
-                }
+                ActionListView(state: state, preferences: preferences)
                 Section("识别与显示") {
                     Toggle("显示轨迹与操作提示", isOn: $preferences.showTrail)
                     LabeledContent("最短轨迹 \(Int(preferences.minimumLength)) 点") {
@@ -59,21 +45,6 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 Section {
-                    ForEach([GestureAction.showDesktop, .spaceLeft, .spaceRight, .missionControl, .closeTab]) { action in
-                        LabeledContent(action.title) {
-                            Button(state.recordingAction == action ? "请按快捷键 · Esc 取消" : preferences.shortcut(for: action).label) {
-                                state.record(action)
-                            }.frame(minWidth: 100)
-                                .accessibilityLabel("录制\(action.title)快捷键")
-                        }
-                    }
-                    if state.recordingAction != nil { Button("取消录制") { state.stopRecording() } }
-                } header: {
-                    Text("操作快捷键")
-                } footer: {
-                    Text("应与系统设置 → 键盘 → 键盘快捷键 → 调度中心中的设置一致。若系统快捷键拦截了录制，可暂时关闭它后录制，再重新开启。左右切换需要已创建多个桌面。关闭窗口直接操作窗口关闭按钮。")
-                }
-                Section {
                     TextField("应用 Bundle ID，以空格或逗号分隔", text: $preferences.excludedBundleIDs, axis: .vertical)
                         .lineLimit(2...4)
                         .textFieldStyle(.roundedBorder)
@@ -81,20 +52,22 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 } header: { Text("排除应用") }
                 Section {
-                    Button("恢复默认手势和快捷键…") { confirmReset = true }
+                    Button("重置手势和快捷键…") { state.stopRecording(); confirmReset = true }
                 }
             }
             .formStyle(.grouped)
         }
         .frame(minWidth: 620, minHeight: 660)
-        .alert("恢复默认手势和快捷键？", isPresented: $confirmReset) {
+        .alert("重置手势和快捷键？", isPresented: $confirmReset) {
             Button("取消", role: .cancel) {}
-            Button("恢复默认", role: .destructive) { state.stopRecording(); preferences.restoreDefaults() }
-        } message: { Text("将重置手势绑定、快捷键和最短轨迹长度。") }
+            Button("重置", role: .destructive) { state.stopRecording(); preferences.restoreDefaults() }
+        } message: { Text("将清除所有手势，并恢复内置功能的默认快捷键和最短轨迹长度。自定义功能的名称和快捷键保留，之后需要重新录制手势。") }
         .onDisappear { state.stopRecording() }
     }
 
     private var statusText: String {
+        if state.customDraft != nil { return "正在编辑自定义功能，动作执行已暂停" }
+        if state.gestureRecordingAction != nil { return "正在录制手势，动作执行已暂停" }
         if !state.trusted { return "等待辅助功能授权" }
         if !state.running { return "事件监听尚未启动" }
         return preferences.enabled ? "正在监听右键手势" : "手势已暂停"
