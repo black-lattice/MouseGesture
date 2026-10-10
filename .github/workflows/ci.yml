@@ -1,0 +1,26 @@
+name: 检查与打包
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: 核心测试与双架构类型检查
+        run: bash scripts/check.sh
+  package:
+    if: github.event_name == 'workflow_dispatch'
+    needs: check
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: 打包 Universal 应用
+        run: bash scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MouseGesture-universal
+          path: dist/MouseGesture-universal.zip
