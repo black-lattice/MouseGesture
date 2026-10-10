@@ -38,7 +38,7 @@ enum GestureAction: String, CaseIterable, Codable, Identifiable {
     case newTab, nextTab, previousTab, goBack, goForward, reloadPage, addressBar
     case newFolder, fileInfo, quickLook, parentFolder, goToFolder, downloadsFolder, desktopFolder, homeFolder, connectServer, moveToTrash
 
-    static var available: [Self] { allCases.filter { $0 != .none } }
+    static let available: [Self] = allCases.filter { $0 != .none }
     var id: String { rawValue }
     var title: String { definition.title }
     var category: ActionCategory { definition.category }

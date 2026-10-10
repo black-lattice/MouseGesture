@@ -15,6 +15,7 @@ final class GestureMonitor {
     private var targetPID: pid_t = 0
     private var swallowUntilUp = false
     private var lastDraw: TimeInterval = 0
+    private var drawPending = false
     private var strokeID = UUID()
     private var spaceObserver: NSObjectProtocol?
     private let frontmostApplication: () -> NSRunningApplication?
@@ -64,6 +65,7 @@ final class GestureMonitor {
     func cancel() {
         strokeID = UUID()
         lastDraw = 0
+        drawPending = false
         if stroke != nil { swallowUntilUp = true }
         stroke = nil
         savedDown = nil
@@ -103,22 +105,24 @@ final class GestureMonitor {
             if type == .rightMouseUp { swallowUntilUp = false }
             return nil
         }
-        guard var current = stroke else { return pass }
+        guard stroke != nil else { return pass }
         if !preferences.enabled || suspended || frontmostApplication()?.processIdentifier != targetPID {
             cancel()
             if type == .rightMouseUp { swallowUntilUp = false }
             return nil
         }
-        current.append(event.location)
-        stroke = current
+        stroke?.append(event.location)
         if type == .rightMouseDragged {
             let now = ProcessInfo.processInfo.systemUptime
-            if current.isGesture, preferences.showTrail, now - lastDraw >= 1.0 / 60 {
+            if stroke?.isGesture == true, preferences.showTrail, !drawPending, now - lastDraw >= 1.0 / 60 {
+                drawPending = true
                 lastDraw = now
                 let id = strokeID
                 // Window work stays outside the synchronous event-tap callback.
                 DispatchQueue.main.async { [weak self] in
-                    guard let self, self.strokeID == id, self.stroke != nil else { return }
+                    guard let self, self.strokeID == id else { return }
+                    self.drawPending = false
+                    guard let current = self.stroke, self.preferences.showTrail else { return }
                     let directions = current.recognize(minimumLength: self.preferences.minimumLength)
                     let label = directions.map { sequence in
                         sequence.map(\.arrow).joined() + "  " + self.preferences.title(for: sequence)
@@ -128,7 +132,7 @@ final class GestureMonitor {
             }
             return nil
         }
-        if type == .rightMouseUp {
+        if type == .rightMouseUp, let current = stroke {
             let down = savedDown
             let up = event.copy()
             let pid = targetPID

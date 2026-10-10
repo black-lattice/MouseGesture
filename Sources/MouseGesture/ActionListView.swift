@@ -29,6 +29,8 @@ struct ActionListView: View {
     }
 
     var body: some View {
+        let actions = actions
+        let customActions = customActions
         Section {
             TextField("搜索功能名称", text: $query)
                 .textFieldStyle(.roundedBorder).accessibilityLabel("搜索功能名称")

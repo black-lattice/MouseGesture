@@ -23,6 +23,7 @@ extension TrailOverlay {
         panels.forEach { $0.setFrameOrigin(CGPoint(x: -100_000, y: -100_000)) }
     }
 
+    fileprivate var pointCountsForTest: [Int] { views.map { $0.points.count } }
     fileprivate var isEmptyForTest: Bool { panels.isEmpty && views.isEmpty }
     fileprivate var hasNoDrawingForTest: Bool { views.allSatisfy { $0.points.isEmpty } }
 
@@ -90,6 +91,26 @@ extension GestureMonitor {
         NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
         drainTrailQueue()
         expectTrail(recognized.count == 1 && overlay.isEmptyForTest, "桌面变化也取消已排队但尚未执行的动作")
+        // A busy event stream keeps one queued draw and paints the newest points.
+        _ = sendTrailEvent(.rightMouseDown, x: 100)
+        overlay.prepareOffscreenForTest()
+        for index in 1...100 {
+            lastDraw = 0 // Emulate events spanning multiple display frames without running the queue.
+            _ = sendTrailEvent(.rightMouseDragged, x: 100 + CGFloat(index) * 4)
+        }
+        expectTrail(drawPending, "高频拖动只保留等待绘制状态")
+        let latestPointCount = stroke?.points.count
+        drainTrailQueue()
+        expectTrail(!drawPending && overlay.pointCountsForTest.allSatisfy { $0 == latestPointCount },
+                    "排队绘制使用最新完整轨迹，完成后释放等待状态")
+        lastDraw = 0
+        _ = sendTrailEvent(.rightMouseDragged, x: 600)
+        preferences.showTrail = false
+        overlay.hide()
+        drainTrailQueue()
+        expectTrail(overlay.isEmptyForTest, "关闭轨迹后旧绘制任务不会重新显示浮层")
+        preferences.showTrail = true
+        cancel()
         stop()
     }
 }

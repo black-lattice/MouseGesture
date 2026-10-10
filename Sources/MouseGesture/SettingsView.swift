@@ -27,7 +27,7 @@ struct SettingsView: View {
                         Text("需要辅助功能权限以识别全局右键手势并执行操作。授权后会自动开始监听。")
                             .foregroundStyle(.secondary)
                         Button("打开辅助功能设置") { state.requestPermission() }
-                    } else if !state.running {
+                    } else if !state.running && preferences.enabled {
                         Text("事件监听未能启动。请尝试重新授权并重启应用；若系统要求输入监控权限，也请开启。")
                         Button("重新检测权限") { state.refreshPermission() }
                         Button("打开输入监控设置") { state.openSettings("Privacy_ListenEvent") }
@@ -69,6 +69,7 @@ struct SettingsView: View {
         if state.customDraft != nil { return "正在编辑自定义功能，动作执行已暂停" }
         if state.gestureRecordingAction != nil { return "正在录制手势，动作执行已暂停" }
         if !state.trusted { return "等待辅助功能授权" }
+        if !preferences.enabled { return "手势已暂停" }
         if !state.running { return "事件监听尚未启动" }
         return preferences.enabled ? "正在监听右键手势" : "手势已暂停"
     }
