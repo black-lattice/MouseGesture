@@ -55,6 +55,8 @@ macOS 原生右键鼠标手势工具。按住鼠标右键绘制直线或折线�
 
 自定义名称、快捷键和手势自动保存，重启后保留。重置会清除全部手势并恢复内置快捷键，自定义功能的名称和快捷键继续保留。
 
+开发运行和安装版统一使用 `com.blacklattice.MouseGesture` 配置域。首次升级会从旧的 `MouseGesture` 配置域补回缺失的自定义功能，保留安装版已有设置；若旧手势与当前功能冲突，则保留名称和快捷键，需要重新录制手势。迁移只执行一次，删除的功能不会在下次启动时重新出现。
+
 ## 系统快捷键
 
 默认发送：显示桌面 `F11`，左右桌面 `Control + ← / →`，调度中心 `Control + ↑`，关闭标签页 `Command + W`。
@@ -98,6 +100,7 @@ GitHub Actions 在推送 `main` 或创建 PR 时运行检查。手动运行“�
 Sources/GestureCore/           纯手势识别和笔画状态
 Sources/MouseGesture/         菜单栏、设置、事件监听、轨迹、动作执行
 Resources/Info.plist          应用元数据
+Resources/AppIcon.icns        Finder、安装包及启动台应用图标
 Tests/                       无系统操作的识别测试
 scripts/check.sh              逻辑测试与双架构类型检查
 scripts/package.sh            显式 Universal 打包

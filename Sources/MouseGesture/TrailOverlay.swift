@@ -16,7 +16,11 @@ final class TrailOverlay {
     }
 
     func hide() {
-        panels.forEach { $0.orderOut(nil) }
+        panels.forEach {
+            // Remove the trail before an action starts a Space transition.
+            $0.alphaValue = 0
+            $0.orderOut(nil)
+        }
         panels.removeAll()
         views.removeAll()
     }
@@ -28,6 +32,7 @@ final class TrailOverlay {
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = false
+            panel.animationBehavior = .none
             panel.ignoresMouseEvents = true
             panel.hidesOnDeactivate = false
             panel.level = .statusBar

@@ -10,6 +10,7 @@ struct GestureBinding: Identifiable, Codable {
 }
 
 final class Preferences: ObservableObject {
+    static let domain = "com.blacklattice.MouseGesture"
     @Published var enabled = true { didSet { save() } }
     @Published var showTrail = true { didSet { save() } }
     @Published var minimumLength: Double = 50 { didSet { save() } }
@@ -18,6 +19,7 @@ final class Preferences: ObservableObject {
     @Published var excludedBundleIDs = "" { didSet { save() } }
     @Published private(set) var customActions: [CustomAction] = [] { didSet { save() } }
     private let defaults: UserDefaults
+    private var isLoading = true
 
     private struct Saved: Codable {
         var enabled: Bool
@@ -29,17 +31,42 @@ final class Preferences: ObservableObject {
         var customActions: [CustomAction]?
     }
 
-    init(defaults: UserDefaults = .standard) {
+    convenience init() {
+        // Swift Package executables and installed apps must share one preference domain.
+        self.init(defaults: UserDefaults(suiteName: Self.domain)!, legacyDefaults: UserDefaults(suiteName: "MouseGesture"))
+    }
+
+    init(defaults: UserDefaults, legacyDefaults: UserDefaults? = nil) {
         self.defaults = defaults
-        guard let data = defaults.data(forKey: "preferences.v1"),
-              let value = try? JSONDecoder().decode(Saved.self, from: data) else { return }
-        enabled = value.enabled
-        showTrail = value.showTrail
-        minimumLength = min(140, max(30, value.minimumLength))
-        bindings = value.bindings
-        shortcuts = value.shortcuts
-        excludedBundleIDs = value.excludedBundleIDs
-        customActions = value.customActions ?? []
+        let needsMigration = legacyDefaults != nil && !defaults.bool(forKey: "preferences.legacyMigrated.v1")
+        let legacy = needsMigration ? Self.read(from: legacyDefaults!) : nil
+        if let value = Self.read(from: defaults) ?? legacy {
+            enabled = value.enabled
+            showTrail = value.showTrail
+            minimumLength = min(140, max(30, value.minimumLength))
+            bindings = value.bindings
+            shortcuts = value.shortcuts
+            excludedBundleIDs = value.excludedBundleIDs
+            customActions = value.customActions ?? []
+        }
+        // Preserve installed settings; recover missing custom actions only once.
+        for var action in legacy?.customActions ?? [] {
+            guard !customActions.contains(where: {
+                $0.id == action.id || $0.name.localizedCaseInsensitiveCompare(action.name) == .orderedSame
+            }) else { continue }
+            if conflict(for: action.directions) != nil { action.pattern = "" }
+            customActions.append(action)
+        }
+        isLoading = false
+        if needsMigration {
+            save()
+            defaults.set(true, forKey: "preferences.legacyMigrated.v1")
+        }
+    }
+
+    private static func read(from defaults: UserDefaults) -> Saved? {
+        guard let data = defaults.data(forKey: "preferences.v1") else { return nil }
+        return try? JSONDecoder().decode(Saved.self, from: data)
     }
 
     func gestures(for action: GestureAction) -> String {
@@ -138,6 +165,7 @@ final class Preferences: ObservableObject {
     }
 
     private func save() {
+        guard !isLoading else { return }
         let value = Saved(enabled: enabled, showTrail: showTrail, minimumLength: minimumLength,
                           bindings: bindings, shortcuts: shortcuts, excludedBundleIDs: excludedBundleIDs,
                           customActions: customActions)

@@ -15,9 +15,23 @@ final class GestureMonitor {
     private var targetPID: pid_t = 0
     private var swallowUntilUp = false
     private var lastDraw: TimeInterval = 0
+    private var strokeID = UUID()
+    private var spaceObserver: NSObjectProtocol?
+    private let frontmostApplication: () -> NSRunningApplication?
     var isRunning: Bool { tap != nil }
 
-    init(preferences: Preferences) { self.preferences = preferences }
+    init(preferences: Preferences,
+         frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }) {
+        self.preferences = preferences
+        self.frontmostApplication = frontmostApplication
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.cancel() }
+    }
+
+    deinit {
+        if let spaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver) }
+    }
 
     func start() -> Bool {
         if tap != nil { return true }
@@ -48,6 +62,8 @@ final class GestureMonitor {
     }
 
     func cancel() {
+        strokeID = UUID()
+        lastDraw = 0
         if stroke != nil { swallowUntilUp = true }
         stroke = nil
         savedDown = nil
@@ -75,7 +91,7 @@ final class GestureMonitor {
             swallowUntilUp = false
             cancel()
             swallowUntilUp = false
-            let app = NSWorkspace.shared.frontmostApplication
+            let app = frontmostApplication()
             guard preferences.enabled, !suspended, !event.flags.contains(.maskAlternate),
                   !preferences.excludes(app?.bundleIdentifier) else { return pass }
             targetPID = app?.processIdentifier ?? 0
@@ -88,7 +104,7 @@ final class GestureMonitor {
             return nil
         }
         guard var current = stroke else { return pass }
-        if !preferences.enabled || suspended || NSWorkspace.shared.frontmostApplication?.processIdentifier != targetPID {
+        if !preferences.enabled || suspended || frontmostApplication()?.processIdentifier != targetPID {
             cancel()
             if type == .rightMouseUp { swallowUntilUp = false }
             return nil
@@ -99,9 +115,10 @@ final class GestureMonitor {
             let now = ProcessInfo.processInfo.systemUptime
             if current.isGesture, preferences.showTrail, now - lastDraw >= 1.0 / 60 {
                 lastDraw = now
+                let id = strokeID
                 // Window work stays outside the synchronous event-tap callback.
                 DispatchQueue.main.async { [weak self] in
-                    guard let self, self.stroke != nil else { return }
+                    guard let self, self.strokeID == id, self.stroke != nil else { return }
                     let directions = current.recognize(minimumLength: self.preferences.minimumLength)
                     let label = directions.map { sequence in
                         sequence.map(\.arrow).joined() + "  " + self.preferences.title(for: sequence)
@@ -115,12 +132,13 @@ final class GestureMonitor {
             let down = savedDown
             let up = event.copy()
             let pid = targetPID
+            let id = strokeID
             stroke = nil
             savedDown = nil
             DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
+                guard let self, self.strokeID == id else { return }
                 self.overlay.hide()
-                guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
+                guard self.frontmostApplication()?.processIdentifier == pid else {
                     self.onStatus?("前台应用已切换，本次手势已取消")
                     return
                 }

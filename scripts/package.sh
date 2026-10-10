@@ -7,9 +7,12 @@ BIN_DIR=$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)
 APP_PATH="$PWD/dist/MouseGesture.app"
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
 ARCHIVE_NAME="MouseGesture-$VERSION-universal"
-mkdir -p "$APP_PATH/Contents/MacOS"
+mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 cp "$BIN_DIR/MouseGesture" "$APP_PATH/Contents/MacOS/MouseGesture"
 cp Resources/Info.plist "$APP_PATH/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP_PATH/Contents/Resources/AppIcon.icns"
+test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$APP_PATH/Contents/Info.plist")" = "AppIcon"
+test -s "$APP_PATH/Contents/Resources/AppIcon.icns"
 
 if [ -n "${SIGNING_IDENTITY:-}" ]; then
     codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP_PATH"

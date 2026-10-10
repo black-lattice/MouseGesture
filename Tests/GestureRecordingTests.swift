@@ -54,7 +54,10 @@ let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: []
 pad.keyDown(with: escape)
 expect(cancelled, "Esc 退出录制")
 
-let state = AppState(usesSystemShortcutCapture: false)
+let draftSuite = "MouseGesture.RecordingTests.\(UUID().uuidString)"
+let draftDefaults = UserDefaults(suiteName: draftSuite)!
+defer { draftDefaults.removePersistentDomain(forName: draftSuite) }
+let state = AppState(preferences: Preferences(defaults: draftDefaults), usesSystemShortcutCapture: false)
 state.recordGesture(.showDesktop)
 expect(state.monitor.suspended && state.gestureRecordingAction == .showDesktop, "录制手势时暂停动作执行")
 state.editCustomAction()
@@ -67,9 +70,6 @@ state.stopRecording()
 expect(!state.monitor.suspended && state.gestureRecordingAction == nil && !state.recordingCustomShortcut,
        "结束录制后恢复监听状态")
 
-let draftSuite = "MouseGesture.RecordingTests.\(UUID().uuidString)"
-let draftDefaults = UserDefaults(suiteName: draftSuite)!
-defer { draftDefaults.removePersistentDomain(forName: draftSuite) }
 let editorState = AppState(preferences: Preferences(defaults: draftDefaults), usesSystemShortcutCapture: false)
 editorState.editCustomAction()
 expect(editorState.customDraft != nil && editorState.monitor.suspended, "打开自定义编辑器即暂停手势动作")
