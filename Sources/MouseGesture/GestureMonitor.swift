@@ -16,6 +16,12 @@ final class GestureMonitor {
     private var swallowUntilUp = false
     private var lastDraw: TimeInterval = 0
     private var drawPending = false
+    private struct PreviewInput: Equatable {
+        let pointCount: Int
+        let cancelled: Bool
+        let minimumLength: Double
+    }
+    private var lastPreviewInput: PreviewInput?
     private var strokeID = UUID()
     private var spaceObserver: NSObjectProtocol?
     private let frontmostApplication: () -> NSRunningApplication?
@@ -66,6 +72,7 @@ final class GestureMonitor {
         strokeID = UUID()
         lastDraw = 0
         drawPending = false
+        lastPreviewInput = nil
         if stroke != nil { swallowUntilUp = true }
         stroke = nil
         savedDown = nil
@@ -114,7 +121,12 @@ final class GestureMonitor {
         stroke?.append(event.location)
         if type == .rightMouseDragged {
             let now = ProcessInfo.processInfo.systemUptime
-            if stroke?.isGesture == true, preferences.showTrail, !drawPending, now - lastDraw >= 1.0 / 60 {
+            let input = stroke.map {
+                PreviewInput(pointCount: $0.points.count, cancelled: $0.isCancelled,
+                             minimumLength: preferences.minimumLength)
+            }
+            if stroke?.isGesture == true, preferences.showTrail, input != lastPreviewInput,
+               !drawPending, now - lastDraw >= 1.0 / 60 {
                 drawPending = true
                 lastDraw = now
                 let id = strokeID
@@ -123,6 +135,8 @@ final class GestureMonitor {
                     guard let self, self.strokeID == id else { return }
                     self.drawPending = false
                     guard let current = self.stroke, self.preferences.showTrail else { return }
+                    self.lastPreviewInput = PreviewInput(pointCount: current.points.count, cancelled: current.isCancelled,
+                                                         minimumLength: self.preferences.minimumLength)
                     let directions = current.recognize(minimumLength: self.preferences.minimumLength)
                     let label = directions.map { sequence in
                         sequence.map(\.arrow).joined() + "  " + self.preferences.title(for: sequence)

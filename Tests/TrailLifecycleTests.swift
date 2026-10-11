@@ -32,6 +32,11 @@ extension TrailOverlay {
         expectTrail(!panels.isEmpty, "为显示器创建测试浮层")
         expectTrail(panels.allSatisfy { $0.animationBehavior == .none }, "轨迹浮层禁用自动窗口动画")
         show(points: [CGPoint(x: 10, y: 10), CGPoint(x: 110, y: 10)], label: "测试")
+        expectTrail(panels.allSatisfy { !$0.isVisible }, "没有轨迹经过的显示器不显示浮层")
+        let primaryTop = NSScreen.screens.first?.frame.maxY ?? 0
+        let origin = panels[0].frame.origin
+        show(points: [CGPoint(x: origin.x + 10, y: primaryTop - origin.y - 100),
+                      CGPoint(x: origin.x + 110, y: primaryTop - origin.y - 100)], label: "测试")
         let displayedPanels = panels
         expectTrail(displayedPanels.allSatisfy(\.isVisible), "轨迹绘制时显示浮层（测试窗口位于屏幕外）")
         hide()
@@ -103,6 +108,16 @@ extension GestureMonitor {
         drainTrailQueue()
         expectTrail(!drawPending && overlay.pointCountsForTest.allSatisfy { $0 == latestPointCount },
                     "排队绘制使用最新完整轨迹，完成后释放等待状态")
+        for _ in 0..<100 {
+            lastDraw = 0
+            _ = sendTrailEvent(.rightMouseDragged, x: 500)
+        }
+        expectTrail(!drawPending, "100 次重复位置事件不再排队识别或绘制")
+        preferences.minimumLength = 60
+        lastDraw = 0
+        _ = sendTrailEvent(.rightMouseDragged, x: 500)
+        expectTrail(drawPending, "识别阈值变化时即使位置不变也更新提示")
+        drainTrailQueue()
         lastDraw = 0
         _ = sendTrailEvent(.rightMouseDragged, x: 600)
         preferences.showTrail = false
