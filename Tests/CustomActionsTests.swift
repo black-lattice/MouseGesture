@@ -74,5 +74,13 @@ customPreferences.deleteCustomAction(saved.id)
 checkCustom(Preferences(defaults: customDefaults).customActions.isEmpty, "删除后重载不再出现")
 checkCustom(customPreferences.bind(edit.directions, to: .showDesktop), "删除后手势可用于其他功能")
 
+var multilineDraft = CustomActionDraft()
+multilineDraft.name = "第一行\n第二行\n第三行"
+multilineDraft.shortcut = edit.shortcut
+multilineDraft.directions = [.down, .left]
+checkCustom(customPreferences.saveCustomAction(multilineDraft) == nil, "多行自定义名称属于合法配置")
+checkCustom(Preferences(defaults: customDefaults).title(for: multilineDraft.directions) == multilineDraft.name,
+            "重载与轨迹提示完整保留多行名称")
+
 if customFailures.isEmpty { print("自定义功能与持久化测试通过：\(customCount) 项") }
 else { customFailures.forEach { print("失败：\($0)") }; exit(1) }
