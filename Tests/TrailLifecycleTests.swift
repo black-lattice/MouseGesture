@@ -26,6 +26,8 @@ extension TrailOverlay {
     fileprivate var pointCountsForTest: [Int] { views.map { $0.points.count } }
     fileprivate var isEmptyForTest: Bool { panels.isEmpty && views.isEmpty }
     fileprivate var hasNoDrawingForTest: Bool { views.allSatisfy { $0.points.isEmpty } }
+    fileprivate var isHiddenForTest: Bool { panels.allSatisfy { !$0.isVisible } && hasNoDrawingForTest }
+    fileprivate var hasNoLabelForTest: Bool { views.allSatisfy { $0.resultLabelForTest.isEmpty } }
 
     fileprivate func testImmediateHide() {
         prepareOffscreenForTest()
@@ -39,10 +41,16 @@ extension TrailOverlay {
                       CGPoint(x: origin.x + 110, y: primaryTop - origin.y - 100)], label: "测试")
         let displayedPanels = panels
         expectTrail(displayedPanels.allSatisfy(\.isVisible), "轨迹绘制时显示浮层（测试窗口位于屏幕外）")
+        expectTrail(views.allSatisfy { !$0.needsDisplay }, "首次显示浮层时首帧内容已完成绘制")
         hide()
         expectTrail(displayedPanels.allSatisfy { !$0.isVisible && $0.alphaValue == 0 }, "隐藏立即移除浮层可见内容")
         expectTrail(isEmptyForTest, "隐藏后释放全部显示器轨迹")
+
     }
+}
+
+extension TrailView {
+    fileprivate var resultLabelForTest: String { label }
 }
 
 extension GestureMonitor {
@@ -56,7 +64,7 @@ extension GestureMonitor {
     fileprivate func testTrailLifecycle() {
         var recognized: [[Direction]] = []
         onRecognized = { [weak self] directions, _ in
-            expectTrail(self?.overlay.isEmptyForTest == true, "执行桌面动作前已清除浮层")
+            expectTrail(self?.overlay.isHiddenForTest == true, "执行桌面动作前已清除轨迹并隐藏浮层")
             recognized.append(directions)
         }
 
@@ -76,7 +84,8 @@ extension GestureMonitor {
         NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
         expectTrail(stroke == nil && swallowUntilUp, "桌面变化立即取消进行中的手势")
         drainTrailQueue()
-        expectTrail(overlay.isEmptyForTest, "桌面变化后排队的绘制不会恢复浮层")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+        expectTrail(overlay.isEmptyForTest && previewTimer == nil, "桌面变化取消绘制和停顿提示任务")
         expectTrail(sendTrailEvent(.rightMouseUp, x: 220) && !swallowUntilUp, "取消后吞掉右键松开且恢复后续操作")
         expectTrail(recognized.isEmpty, "切换桌面取消的手势不会执行动作")
 
@@ -86,9 +95,43 @@ extension GestureMonitor {
         _ = sendTrailEvent(.rightMouseDragged, x: 220)
         drainTrailQueue()
         expectTrail(!overlay.hasNoDrawingForTest, "有效手势仍然正常绘制")
-        _ = sendTrailEvent(.rightMouseUp, x: 220)
+        expectTrail(overlay.hasNoLabelForTest, "绘制过程中不显示匹配文字")
+        let idleTimer = previewTimer
+        let idleDeadline = idleTimer?.fireDate
+        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
+        expectTrail(overlay.hasNoLabelForTest, "停顿不足 200ms 不显示提示")
+        _ = sendTrailEvent(.rightMouseDragged, x: 220)
+        expectTrail(previewTimer === idleTimer && previewTimer?.fireDate == idleDeadline,
+                    "重复位置事件不延后停顿提示")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.16))
+        expectTrail(!overlay.hasNoLabelForTest && overlay.pointCountsForTest.allSatisfy { $0 > 1 },
+                    "仍按住右键时，停顿约 200ms 后显示提示并保留轨迹")
+        expectTrail(recognized.isEmpty && previewTimer == nil, "停顿只预览一次，不执行动作或持续匹配")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+        expectTrail(!overlay.hasNoLabelForTest, "保持静止时提示继续显示")
+        for x: CGFloat in [221, 219, 220.5, 219.5, 222] {
+            _ = sendTrailEvent(.rightMouseDragged, x: x)
+        }
+        drainTrailQueue()
+        expectTrail(!overlay.hasNoLabelForTest && previewTimer == nil,
+                    "提示出现后小范围抖动不会反复隐藏并重启提示")
+        _ = sendTrailEvent(.rightMouseDragged, x: 223)
+        drainTrailQueue()
+        expectTrail(overlay.hasNoLabelForTest && previewTimer != nil,
+                    "累积移动达到 3 点时隐藏提示，即使每次事件移动很小")
+        let resumedTimer = previewTimer
+        RunLoop.main.run(until: Date().addingTimeInterval(0.10))
+        _ = sendTrailEvent(.rightMouseDragged, x: 260)
+        expectTrail(previewTimer === resumedTimer, "连续移动复用同一定时器")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.12))
+        expectTrail(overlay.hasNoLabelForTest, "连续移动重新计算停顿时间，旧截止时间不弹提示")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.12))
+        expectTrail(!overlay.hasNoLabelForTest, "再次停顿后显示新的匹配提示")
+        _ = sendTrailEvent(.rightMouseUp, x: 260)
         drainTrailQueue()
         expectTrail(recognized == [[.right]], "正常松开只执行一次识别动作")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+        expectTrail(overlay.isEmptyForTest && previewTimer == nil, "松开后清除提示，延迟任务不会重新显示")
 
         _ = sendTrailEvent(.rightMouseDown, x: 100)
         _ = sendTrailEvent(.rightMouseDragged, x: 220)
@@ -116,7 +159,7 @@ extension GestureMonitor {
         preferences.minimumLength = 60
         lastDraw = 0
         _ = sendTrailEvent(.rightMouseDragged, x: 500)
-        expectTrail(drawPending, "识别阈值变化时即使位置不变也更新提示")
+        expectTrail(!drawPending, "识别阈值变化不触发拖动中的匹配或文字刷新")
         drainTrailQueue()
         lastDraw = 0
         _ = sendTrailEvent(.rightMouseDragged, x: 600)
@@ -124,8 +167,26 @@ extension GestureMonitor {
         overlay.hide()
         drainTrailQueue()
         expectTrail(overlay.isEmptyForTest, "关闭轨迹后旧绘制任务不会重新显示浮层")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+        expectTrail(stroke != nil && previewTimer == nil && overlay.isEmptyForTest,
+                    "停顿等待期间关闭显示只隐藏预览，不取消仍在进行的手势")
+        _ = sendTrailEvent(.rightMouseUp, x: 600)
+        drainTrailQueue()
+        expectTrail(overlay.isEmptyForTest, "关闭显示选项后，松开也不显示提示")
         preferences.showTrail = true
         cancel()
+
+        let callback = onRecognized
+        onRecognized = { [weak self] directions, pid in
+            callback?(directions, pid)
+            self?.cancel()
+        }
+        _ = sendTrailEvent(.rightMouseDown, x: 100)
+        _ = sendTrailEvent(.rightMouseDragged, x: 220)
+        _ = sendTrailEvent(.rightMouseUp, x: 220)
+        drainTrailQueue()
+        expectTrail(overlay.isEmptyForTest, "动作执行期间被取消时，不重新弹出停顿提示")
+        onRecognized = callback
         stop()
     }
 }

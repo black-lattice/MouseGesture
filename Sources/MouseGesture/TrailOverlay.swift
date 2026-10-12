@@ -14,6 +14,8 @@ final class TrailOverlay {
             if view.drawingBounds.isEmpty {
                 if panel.isVisible { panel.orderOut(nil) }
             } else if !panel.isVisible {
+                // Paint the first frame before exposing the transparent window.
+                panel.displayIfNeeded()
                 panel.orderFrontRegardless()
             }
         }
@@ -54,6 +56,7 @@ private final class TrailView: NSView {
     private var label = ""
     private var path = NSBezierPath()
     private var labelBox: CGRect?
+    private var labelTextHeight: CGFloat = 0
     private(set) var drawingBounds = CGRect.null
     private static let attributes: [NSAttributedString.Key: Any] = [
         .font: NSFont.systemFont(ofSize: 14, weight: .medium), .foregroundColor: NSColor.white
@@ -78,8 +81,9 @@ private final class TrailView: NSView {
         }
         self.label = label
         labelBox = nil
-        if let last = points.last, bounds.contains(last) {
+        if !label.isEmpty, let last = points.last, bounds.contains(last) {
             let size = (label as NSString).size(withAttributes: Self.attributes)
+            labelTextHeight = size.height
             // Names can contain line breaks; include the full text height in the box and dirty region.
             let height = max(32, ceil(size.height) + 14)
             labelBox = CGRect(x: min(max(last.x + 18, 8), bounds.width - size.width - 32),
@@ -87,7 +91,7 @@ private final class TrailView: NSView {
                               width: size.width + 24, height: height)
         }
         // Include stroke caps/antialiasing and the old label, so moving/shortening it leaves no residue.
-        let trailBounds = points.isEmpty ? CGRect.null : path.bounds.insetBy(dx: -4, dy: -4)
+        let trailBounds = points.count < 2 ? CGRect.null : path.bounds.insetBy(dx: -4, dy: -4)
         drawingBounds = trailBounds.union(labelBox?.insetBy(dx: -1, dy: -1) ?? .null).intersection(bounds)
         let dirty = previousBounds.union(drawingBounds).integral.intersection(bounds)
         if !dirty.isNull && !dirty.isEmpty { setNeedsDisplay(dirty) }
@@ -105,6 +109,7 @@ private final class TrailView: NSView {
         guard let box = labelBox else { return }
         NSColor.black.withAlphaComponent(0.82).setFill()
         NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8).fill()
-        (label as NSString).draw(at: CGPoint(x: box.minX + 12, y: box.minY + 7), withAttributes: Self.attributes)
+        (label as NSString).draw(at: CGPoint(x: box.minX + 12, y: box.midY - labelTextHeight / 2),
+                                withAttributes: Self.attributes)
     }
 }

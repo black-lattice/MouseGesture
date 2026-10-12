@@ -16,12 +16,10 @@ final class GestureMonitor {
     private var swallowUntilUp = false
     private var lastDraw: TimeInterval = 0
     private var drawPending = false
-    private struct PreviewInput: Equatable {
-        let pointCount: Int
-        let cancelled: Bool
-        let minimumLength: Double
-    }
-    private var lastPreviewInput: PreviewInput?
+    private var lastDrawnPointCount = 0
+    private var previewTimer: Timer?
+    private var previewLabel = ""
+    private var lastMotionPoint: CGPoint?
     private var strokeID = UUID()
     private var spaceObserver: NSObjectProtocol?
     private let frontmostApplication: () -> NSRunningApplication?
@@ -37,6 +35,7 @@ final class GestureMonitor {
     }
 
     deinit {
+        previewTimer?.invalidate()
         if let spaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver) }
     }
 
@@ -69,14 +68,49 @@ final class GestureMonitor {
     }
 
     func cancel() {
+        cancelPreview()
         strokeID = UUID()
         lastDraw = 0
         drawPending = false
-        lastPreviewInput = nil
+        lastDrawnPointCount = 0
         if stroke != nil { swallowUntilUp = true }
         stroke = nil
         savedDown = nil
         overlay.hide()
+    }
+
+    private func cancelPreview() {
+        previewTimer?.invalidate()
+        previewTimer = nil
+        previewLabel = ""
+        lastMotionPoint = nil
+    }
+
+    private func schedulePreview() {
+        // Reuse one timer while moving instead of queuing work for every mouse event.
+        if let previewTimer {
+            previewTimer.fireDate = Date(timeIntervalSinceNow: 0.2)
+            return
+        }
+        let id = strokeID
+        let timer = Timer(timeInterval: 0.2, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.previewTimer = nil
+            guard self.strokeID == id, let current = self.stroke else { return }
+            guard self.preferences.enabled, !self.suspended,
+                  self.frontmostApplication()?.processIdentifier == self.targetPID else {
+                self.cancel()
+                return
+            }
+            guard self.preferences.showTrail else { self.overlay.hide(); return }
+            self.previewLabel = current.recognize(minimumLength: self.preferences.minimumLength).map { sequence in
+                sequence.map(\.arrow).joined(separator: " ") + "  " + self.preferences.title(for: sequence)
+            } ?? "未识别手势 · 继续绘制 · Esc 取消"
+            self.lastDrawnPointCount = current.points.count
+            self.overlay.show(points: current.points, label: self.previewLabel)
+        }
+        previewTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -105,6 +139,7 @@ final class GestureMonitor {
                   !preferences.excludes(app?.bundleIdentifier) else { return pass }
             targetPID = app?.processIdentifier ?? 0
             stroke = Stroke(start: event.location)
+            lastMotionPoint = event.location
             savedDown = event.copy()
             return nil
         }
@@ -120,12 +155,21 @@ final class GestureMonitor {
         }
         stroke?.append(event.location)
         if type == .rightMouseDragged {
-            let now = ProcessInfo.processInfo.systemUptime
-            let input = stroke.map {
-                PreviewInput(pointCount: $0.points.count, cancelled: $0.isCancelled,
-                             minimumLength: preferences.minimumLength)
+            // Keep a visible hint stable under hand jitter. Compare against the fixed
+            // pause point so a series of small movements still counts as resumed drawing.
+            if let lastMotionPoint, event.location != lastMotionPoint,
+               previewLabel.isEmpty || hypot(event.location.x - lastMotionPoint.x,
+                                             event.location.y - lastMotionPoint.y) >= 3 {
+                self.lastMotionPoint = event.location
+                if !previewLabel.isEmpty {
+                    previewLabel = ""
+                    lastDrawnPointCount = 0
+                    lastDraw = 0
+                }
+                if stroke?.isGesture == true, preferences.showTrail { schedulePreview() }
             }
-            if stroke?.isGesture == true, preferences.showTrail, input != lastPreviewInput,
+            let now = ProcessInfo.processInfo.systemUptime
+            if stroke?.isGesture == true, preferences.showTrail, stroke?.points.count != lastDrawnPointCount,
                !drawPending, now - lastDraw >= 1.0 / 60 {
                 drawPending = true
                 lastDraw = now
@@ -135,18 +179,15 @@ final class GestureMonitor {
                     guard let self, self.strokeID == id else { return }
                     self.drawPending = false
                     guard let current = self.stroke, self.preferences.showTrail else { return }
-                    self.lastPreviewInput = PreviewInput(pointCount: current.points.count, cancelled: current.isCancelled,
-                                                         minimumLength: self.preferences.minimumLength)
-                    let directions = current.recognize(minimumLength: self.preferences.minimumLength)
-                    let label = directions.map { sequence in
-                        sequence.map(\.arrow).joined() + "  " + self.preferences.title(for: sequence)
-                    } ?? "继续绘制 · 松开结束 · Esc 取消"
-                    self.overlay.show(points: current.points, label: label)
+                    self.lastDrawnPointCount = current.points.count
+                    // Moving only draws; matching happens once the mouse has been still for 200 ms.
+                    self.overlay.show(points: current.points, label: self.previewLabel)
                 }
             }
             return nil
         }
         if type == .rightMouseUp, let current = stroke {
+            cancelPreview()
             let down = savedDown
             let up = event.copy()
             let pid = targetPID

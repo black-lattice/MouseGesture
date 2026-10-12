@@ -28,6 +28,9 @@ private func trailPixels(_ bitmap: NSBitmapImageRep) -> Data {
 }
 private let renderBounds = CGRect(x: 0, y: 0, width: 800, height: 600)
 private let renderCases: [([CGPoint], String)] = [
+    ([CGPoint(x: 100, y: 100), CGPoint(x: 210.5, y: 100)], ""),
+    ([CGPoint(x: 100, y: 100), CGPoint(x: 210.5, y: 100)], "→ 截图"),
+    ([CGPoint(x: 100, y: 100), CGPoint(x: 210.5, y: 100)], ""),
     ([CGPoint(x: 100, y: 100), CGPoint(x: 210.5, y: 100)], "→ 截图"),
     ([CGPoint(x: 100, y: 100), CGPoint(x: 210.5, y: 100), CGPoint(x: 210.5, y: 260.5)], "→ ↓ 自定义功能名称"),
     ([CGPoint(x: 100, y: 100), CGPoint(x: 210.5, y: 100), CGPoint(x: 210.5, y: 260.5)], "短提示"),
@@ -66,6 +69,12 @@ checkRendering(firstDirtyArea > 0 && firstDirtyArea < renderBounds.width * rende
 private let crossing = TrailView(frame: renderBounds)
 crossing.update(points: [CGPoint(x: -100, y: 300), CGPoint(x: 900, y: 300)], label: "跨屏")
 checkRendering(!crossing.drawingBounds.isEmpty, "跨屏线段即使两端均在屏幕外仍绘制")
+private let unlabeled = TrailView(frame: renderBounds)
+unlabeled.update(points: [CGPoint(x: 100, y: 100), CGPoint(x: 200, y: 100)], label: "")
+checkRendering(unlabeled.drawingBounds == CGRect(x: 96, y: 96, width: 108, height: 8),
+               "纯轨迹不生成空白提示框或文字刷新区域")
+unlabeled.update(points: [CGPoint(x: 200, y: 100)], label: "")
+checkRendering(unlabeled.drawingBounds.isEmpty, "单个提示锚点不会残留轨迹圆点")
 if renderFailures.isEmpty {
     print("轨迹局部重绘像素测试通过：\(renderChecks) 项（1x / 2x，短轨迹面积 \(Int(firstDirtyArea)) / 480000 平方点）")
 } else {
