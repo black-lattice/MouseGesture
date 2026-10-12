@@ -62,6 +62,7 @@ jobs:
           cd dist
           sha256sum --check SHA256SUMS.txt
           cd ..
+          python3 scripts/release-notes.py "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
           gh release create "$GITHUB_REF_NAME" \
             dist/MouseGesture-*-universal.zip dist/MouseGesture-*-universal.dmg dist/SHA256SUMS.txt \
-            --verify-tag --title "MouseGesture $GITHUB_REF_NAME" --notes-file CHANGELOG.md --latest
+            --verify-tag --title "MouseGesture $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md" --latest
