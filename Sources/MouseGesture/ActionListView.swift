@@ -42,7 +42,7 @@ struct ActionListView: View {
                 Spacer()
                 Text("\(actions.count + customActions.count) 项功能").foregroundStyle(.secondary)
             }
-            Text("内置功能的快捷键仅供查看，点击手势可录制；只有自定义功能可以录入或修改快捷键。尚未录制手势的功能不会触发。")
+            Text("内置功能的快捷键仅供查看，点击手势可录制；需要其他快捷键时可添加自定义功能。尚未录制手势的功能不会触发。")
                 .font(.callout).foregroundStyle(.secondary)
             if actions.isEmpty && customActions.isEmpty && state.customDraft == nil {
                 Text(category == .custom && query.isEmpty ? "还没有已保存的自定义功能，可在下方空白行填写。" : "没有匹配的功能，请更换关键词或分类。")

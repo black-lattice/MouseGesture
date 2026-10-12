@@ -35,13 +35,16 @@ final class AppState: ObservableObject {
         }
     }
     @Published var recordingCustomShortcut = false
+    @Published var recordingMouseShortcut: MouseButton?
+    @Published var recordingMouseButton: MouseButton?
+    @Published var mouseRecordingError: String?
     private var timer: Timer?
     private var enabledSubscription: AnyCancellable?
     private var hasStarted = false
     private var sleeping = false
     private var sessionActive = true
-    private var keyboardMonitor: Any?
-    private let shortcutRecorder: ShortcutRecorder
+    var keyboardMonitor: Any?
+    let shortcutRecorder: ShortcutRecorder
     private let permissionCheck: () -> Bool
 
     init(preferences: Preferences = Preferences(), usesSystemShortcutCapture: Bool = true,
@@ -57,6 +60,9 @@ final class AppState: ObservableObject {
         guard !hasStarted else { return }
         hasStarted = true
         monitor.onStatus = { [weak self] in self?.lastResult = $0 }
+        monitor.mouseButtons.onClick = { [weak self] button, shortcut, pid in
+            self?.lastResult = ActionExecutor.send(shortcut, title: button.title, targetPID: pid)
+        }
         monitor.onRecognized = { [weak self] directions, pid in
             guard let self, self.preferences.enabled,
                   self.gestureRecordingAction == nil, self.customDraft == nil else { return }
@@ -210,12 +216,12 @@ final class AppState: ObservableObject {
         if !started { shortcutRecordingFailed() }
     }
 
-    private func shortcutRecordingInterrupted() {
+    func shortcutRecordingInterrupted() {
         stopRecording()
         lastResult = "快捷键录制已中断，请重新点击录制。"
     }
 
-    private func shortcutRecordingFailed() {
+    func shortcutRecordingFailed() {
         let message = "无法拦截快捷键，请检查辅助功能权限后重新录制；若系统要求输入监控权限，也请开启。"
         customDraft?.shortcutError = message
         stopRecording()
@@ -236,6 +242,9 @@ final class AppState: ObservableObject {
         if gestureRecordingAction != nil { gestureRecordingAction = nil }
         customDraft = nil
         if recordingCustomShortcut { recordingCustomShortcut = false }
+        if recordingMouseShortcut != nil { recordingMouseShortcut = nil }
+        if recordingMouseButton != nil { recordingMouseButton = nil }
+        if mouseRecordingError != nil { mouseRecordingError = nil }
         monitor.suspended = false
     }
 

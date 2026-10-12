@@ -16,6 +16,7 @@ final class Preferences: ObservableObject {
     @Published var minimumLength: Double = 50 { didSet { save() } }
     @Published var bindings: [GestureBinding] = [] { didSet { save() } }
     @Published var shortcuts: [String: KeyboardShortcut] = [:] { didSet { save() } }
+    @Published var mouseBindings: [String: MouseButtonBinding] = [:] { didSet { save() } }
     @Published var excludedBundleIDs = "" { didSet { save() } }
     @Published private(set) var customActions: [CustomAction] = [] { didSet { save() } }
     private let defaults: UserDefaults
@@ -29,6 +30,7 @@ final class Preferences: ObservableObject {
         var shortcuts: [String: KeyboardShortcut]
         var excludedBundleIDs: String
         var customActions: [CustomAction]?
+        var mouseBindings: [String: MouseButtonBinding]?
     }
 
     convenience init(domain: String = Preferences.domain, legacyDomain: String? = "MouseGesture") {
@@ -55,6 +57,7 @@ final class Preferences: ObservableObject {
             shortcuts = value.shortcuts
             excludedBundleIDs = value.excludedBundleIDs
             customActions = value.customActions ?? []
+            mouseBindings = value.mouseBindings ?? [:]
         }
         // Preserve installed settings; recover missing custom actions only once.
         for var action in legacy?.customActions ?? [] {
@@ -167,6 +170,7 @@ final class Preferences: ObservableObject {
     func restoreDefaults() {
         bindings = []
         shortcuts = [:]
+        mouseBindings = [:]
         minimumLength = 50
         customActions = customActions.map { var action = $0; action.pattern = ""; return action }
     }
@@ -175,7 +179,7 @@ final class Preferences: ObservableObject {
         guard !isLoading else { return }
         let value = Saved(enabled: enabled, showTrail: showTrail, minimumLength: minimumLength,
                           bindings: bindings, shortcuts: shortcuts, excludedBundleIDs: excludedBundleIDs,
-                          customActions: customActions)
+                          customActions: customActions, mouseBindings: mouseBindings)
         if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: "preferences.v1") }
     }
 }

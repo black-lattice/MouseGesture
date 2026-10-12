@@ -5,7 +5,8 @@ import GestureCore
 final class GestureMonitor {
     var onStatus: ((String) -> Void)?
     var onRecognized: (([Direction], pid_t) -> Void)?
-    var suspended = false
+    var suspended = false { didSet { mouseButtons.suspended = suspended } }
+    let mouseButtons: MouseButtonMonitor
     private let preferences: Preferences
     private let overlay = TrailOverlay()
     private var tap: CFMachPort?
@@ -29,6 +30,7 @@ final class GestureMonitor {
          frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }) {
         self.preferences = preferences
         self.frontmostApplication = frontmostApplication
+        mouseButtons = MouseButtonMonitor(preferences: preferences, frontmostApplication: frontmostApplication)
         spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.cancel() }
@@ -42,7 +44,8 @@ final class GestureMonitor {
     func start() -> Bool {
         if tap != nil { return true }
         guard AXIsProcessTrusted() else { return false }
-        let types: [CGEventType] = [.rightMouseDown, .rightMouseDragged, .rightMouseUp, .keyDown, .leftMouseDown]
+        let types: [CGEventType] = [.rightMouseDown, .rightMouseDragged, .rightMouseUp, .keyDown, .leftMouseDown,
+                                    .otherMouseDown, .otherMouseDragged, .otherMouseUp]
         let mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
         let callback: CGEventTapCallBack = { _, type, event, context in
             guard let context else { return Unmanaged.passUnretained(event) }
@@ -68,6 +71,7 @@ final class GestureMonitor {
     }
 
     func cancel() {
+        mouseButtons.cancel()
         cancelPreview()
         strokeID = UUID()
         lastDraw = 0
@@ -121,7 +125,12 @@ final class GestureMonitor {
             return pass
         }
         if event.getIntegerValueField(.eventSourceUserData) == ActionExecutor.eventTag { return pass }
+        if type == .otherMouseDown || type == .otherMouseDragged || type == .otherMouseUp {
+            if type == .otherMouseDown, stroke != nil { cancel() }
+            return mouseButtons.handle(type: type, event: event) ? nil : pass
+        }
         if type == .keyDown || type == .leftMouseDown {
+            mouseButtons.cancel()
             if stroke != nil {
                 cancel()
                 onStatus?("手势已取消")

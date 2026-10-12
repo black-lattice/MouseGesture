@@ -11,13 +11,13 @@ xcrun swift "$CHECK_DIR/main.swift"
 
 # Check binding persistence in an isolated preferences domain; never touch user settings.
 cat Sources/GestureCore/GestureRecognizer.swift > "$CHECK_DIR/preferences.swift"
-sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,Preferences}.swift >> "$CHECK_DIR/preferences.swift"
-cat Tests/PreferencesTests.swift Tests/CustomActionsTests.swift Tests/PreferencesMigrationTests.swift >> "$CHECK_DIR/preferences.swift"
+sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,MouseButtonBinding,Preferences}.swift >> "$CHECK_DIR/preferences.swift"
+cat Tests/PreferencesTests.swift Tests/CustomActionsTests.swift Tests/PreferencesMigrationTests.swift Tests/MouseButtonPreferencesTests.swift >> "$CHECK_DIR/preferences.swift"
 xcrun swift "$CHECK_DIR/preferences.swift"
 
 # Validate disk persistence across process exits using release optimization.
 cat Sources/GestureCore/GestureRecognizer.swift > "$CHECK_DIR/persistence.swift"
-sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,Preferences}.swift >> "$CHECK_DIR/persistence.swift"
+sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,MouseButtonBinding,Preferences}.swift >> "$CHECK_DIR/persistence.swift"
 cat Tests/PersistenceProcessTests.swift >> "$CHECK_DIR/persistence.swift"
 xcrun swiftc -O "$CHECK_DIR/persistence.swift" -o "$CHECK_DIR/persistence"
 python3 - "$CHECK_DIR/persistence" <<'PY'
@@ -37,7 +37,7 @@ PY
 # A bare executable has no app bundle ID, so it cannot catch installed-app startup bugs.
 # Compile the production convenience initializer and run it in a real .app as well.
 cat Sources/GestureCore/GestureRecognizer.swift > "$CHECK_DIR/startup.swift"
-sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,Preferences}.swift >> "$CHECK_DIR/startup.swift"
+sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,MouseButtonBinding,Preferences}.swift >> "$CHECK_DIR/startup.swift"
 cat Tests/PreferencesStartupTests.swift >> "$CHECK_DIR/startup.swift"
 xcrun swiftc -O "$CHECK_DIR/startup.swift" -o "$CHECK_DIR/startup"
 python3 - "$CHECK_DIR/startup" "$CHECK_DIR" <<'PY'
@@ -68,8 +68,8 @@ PY
 
 # Exercise native recording events in a hidden test window, without posting system events.
 cat Sources/GestureCore/GestureRecognizer.swift > "$CHECK_DIR/recording.swift"
-sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,Preferences,ShortcutRecorder,AppState,ActionExecutor,GestureMonitor,TrailOverlay,GestureRecordingView}.swift >> "$CHECK_DIR/recording.swift"
-cat Tests/ShortcutCaptureTests.swift Tests/GestureRecordingTests.swift Tests/TrailLifecycleTests.swift Tests/TrailRenderingTests.swift Tests/PerformanceTests.swift >> "$CHECK_DIR/recording.swift"
+sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,MouseButtonBinding,Preferences,ShortcutRecorder,AppState,AppState+MouseButtons,ActionExecutor,MouseButtonMonitor,GestureMonitor,TrailOverlay,GestureRecordingView}.swift >> "$CHECK_DIR/recording.swift"
+cat Tests/ShortcutCaptureTests.swift Tests/GestureRecordingTests.swift Tests/TrailLifecycleTests.swift Tests/TrailRenderingTests.swift Tests/PerformanceTests.swift Tests/MouseButtonTests.swift >> "$CHECK_DIR/recording.swift"
 xcrun swift "$CHECK_DIR/recording.swift"
 
 for ARCH in x86_64 arm64; do

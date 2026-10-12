@@ -22,7 +22,7 @@ enum ActionExecutor {
         send(action.shortcut, title: action.name, targetPID: targetPID)
     }
 
-    private static func send(_ shortcut: KeyboardShortcut, title: String, targetPID: pid_t) -> String {
+    static func send(_ shortcut: KeyboardShortcut, title: String, targetPID: pid_t) -> String {
         guard AXIsProcessTrusted() else { return "辅助功能权限不可用" }
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else {
             return "前台应用已切换，本次手势已取消"
