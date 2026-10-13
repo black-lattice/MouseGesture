@@ -135,10 +135,21 @@ extension GestureMonitor {
 
         _ = sendTrailEvent(.rightMouseDown, x: 100)
         _ = sendTrailEvent(.rightMouseDragged, x: 220)
+        trailPhysicalButtonPressed = false
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+        expectTrail(overlay.hasNoLabelForTest && recognized.count == 1,
+                    "物理右键已松开但松开事件尚未处理时不显示提示或提前执行")
+        _ = sendTrailEvent(.rightMouseUp, x: 220)
+        drainTrailQueue()
+        expectTrail(recognized.count == 2, "松开事件到达后立即执行识别动作")
+        trailPhysicalButtonPressed = true
+
+        _ = sendTrailEvent(.rightMouseDown, x: 100)
+        _ = sendTrailEvent(.rightMouseDragged, x: 220)
         _ = sendTrailEvent(.rightMouseUp, x: 220)
         NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
         drainTrailQueue()
-        expectTrail(recognized.count == 1 && overlay.isEmptyForTest, "桌面变化也取消已排队但尚未执行的动作")
+        expectTrail(recognized.count == 2 && overlay.isEmptyForTest, "桌面变化也取消已排队但尚未执行的动作")
         // A busy event stream keeps one queued draw and paints the newest points.
         _ = sendTrailEvent(.rightMouseDown, x: 100)
         overlay.prepareOffscreenForTest()
@@ -199,6 +210,8 @@ trailPreferences.enabled = true
 trailPreferences.showTrail = true
 TrailOverlay().testImmediateHide()
 // CI may have no foreground app. Keep the fixture independent of the runner's desktop.
-GestureMonitor(preferences: trailPreferences, frontmostApplication: { .current }).testTrailLifecycle()
+private var trailPhysicalButtonPressed = true
+GestureMonitor(preferences: trailPreferences, frontmostApplication: { .current },
+               rightButtonPressed: { trailPhysicalButtonPressed }).testTrailLifecycle()
 if trailFailures.isEmpty { print("轨迹浮层生命周期测试通过：\(trailChecks) 项") }
 else { trailFailures.forEach { print("失败：\($0)") }; exit(1) }

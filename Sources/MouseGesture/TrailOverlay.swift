@@ -22,13 +22,19 @@ final class TrailOverlay {
     }
 
     func hide() {
-        panels.forEach {
+        let hiddenPanels = panels
+        let hiddenViews = views
+        panels.removeAll()
+        views.removeAll()
+        hiddenPanels.forEach {
             // Remove the trail before an action starts a Space transition.
             $0.alphaValue = 0
             $0.orderOut(nil)
         }
-        panels.removeAll()
-        views.removeAll()
+        // Releasing NSPanels can be expensive; finish the action callback first.
+        if !hiddenPanels.isEmpty {
+            DispatchQueue.main.async { withExtendedLifetime((hiddenPanels, hiddenViews)) {} }
+        }
     }
 
     private func prepare() {

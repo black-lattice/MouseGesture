@@ -24,12 +24,15 @@ final class GestureMonitor {
     private var strokeID = UUID()
     private var spaceObserver: NSObjectProtocol?
     private let frontmostApplication: () -> NSRunningApplication?
+    private let rightButtonPressed: () -> Bool
     var isRunning: Bool { tap != nil }
 
     init(preferences: Preferences,
-         frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }) {
+         frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication },
+         rightButtonPressed: @escaping () -> Bool = { CGEventSource.buttonState(.hidSystemState, button: .right) }) {
         self.preferences = preferences
         self.frontmostApplication = frontmostApplication
+        self.rightButtonPressed = rightButtonPressed
         mouseButtons = MouseButtonMonitor(preferences: preferences, frontmostApplication: frontmostApplication)
         spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
@@ -101,6 +104,7 @@ final class GestureMonitor {
             guard let self else { return }
             self.previewTimer = nil
             guard self.strokeID == id, let current = self.stroke else { return }
+            guard self.rightButtonPressed() else { return }
             guard self.preferences.enabled, !self.suspended,
                   self.frontmostApplication()?.processIdentifier == self.targetPID else {
                 self.cancel()
