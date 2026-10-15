@@ -13,7 +13,7 @@ final class GestureMonitor {
     private var source: CFRunLoopSource?
     private var stroke: Stroke?
     private var savedDown: CGEvent?
-    private var target: GestureTarget?
+    private var target: GestureTargetRequest?
     private var initialFrontmostPID: pid_t?
     private var swallowUntilUp = false
     private var lastDraw: TimeInterval = 0
@@ -24,29 +24,53 @@ final class GestureMonitor {
     private var lastMotionPoint: CGPoint?
     private var strokeID = UUID()
     private var spaceObserver: NSObjectProtocol?
+    private var applicationObserver: NSObjectProtocol?
+    private var lookupWork: DispatchWorkItem?
+    private var awaitingAction = false
+    private var expectedActivationPID: pid_t?
     private let frontmostApplication: () -> NSRunningApplication?
     private let rightButtonPressed: () -> Bool
-    private let targetAtPoint: (CGPoint) -> GestureTarget?
+    private let captureTarget: (CGPoint) -> GestureTargetRequest?
+    private let lookupTarget: (GestureTargetRequest, @escaping (GestureTarget?) -> Void) -> DispatchWorkItem?
+    private let postEvent: (CGEvent) -> Void
+    private let workspaceNotifications: NotificationCenter
     var currentStrokeID: UUID { strokeID }
     var isRunning: Bool { tap != nil }
 
     init(preferences: Preferences,
          frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication },
          rightButtonPressed: @escaping () -> Bool = { CGEventSource.buttonState(.hidSystemState, button: .right) },
-         targetAtPoint: @escaping (CGPoint) -> GestureTarget? = GestureTarget.at) {
+         captureTarget: @escaping (CGPoint) -> GestureTargetRequest? = GestureTargetRequest.capture,
+         lookupTarget: @escaping (GestureTargetRequest, @escaping (GestureTarget?) -> Void) -> DispatchWorkItem? = GestureTargetRequest.lookup,
+         postEvent: @escaping (CGEvent) -> Void = { $0.post(tap: .cgSessionEventTap) },
+         workspaceNotifications: NotificationCenter = NSWorkspace.shared.notificationCenter) {
         self.preferences = preferences
         self.frontmostApplication = frontmostApplication
         self.rightButtonPressed = rightButtonPressed
-        self.targetAtPoint = targetAtPoint
+        self.captureTarget = captureTarget
+        self.lookupTarget = lookupTarget
+        self.postEvent = postEvent
+        self.workspaceNotifications = workspaceNotifications
         mouseButtons = MouseButtonMonitor(preferences: preferences, frontmostApplication: frontmostApplication)
-        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+        spaceObserver = workspaceNotifications.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.cancel() }
+        applicationObserver = workspaceNotifications.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let self, self.stroke != nil || self.awaitingAction else { return }
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            if self.stroke == nil, let expected = self.expectedActivationPID, app?.processIdentifier == expected { return }
+            self.cancel()
+            self.onStatus?("前台应用已切换，本次手势已取消")
+        }
     }
 
     deinit {
         previewTimer?.invalidate()
-        if let spaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver) }
+        if let spaceObserver { workspaceNotifications.removeObserver(spaceObserver) }
+        if let applicationObserver { workspaceNotifications.removeObserver(applicationObserver) }
+        lookupWork?.cancel()
     }
 
     func start() -> Bool {
@@ -78,7 +102,24 @@ final class GestureMonitor {
         source = nil
     }
 
+    @discardableResult
+    func beginExecution(targetPID: pid_t?) -> Bool {
+        guard frontmostApplication()?.processIdentifier == initialFrontmostPID else { cancel(); return false }
+        expectedActivationPID = targetPID
+        return true
+    }
+
+    func finishExecution(strokeID: UUID) {
+        guard self.strokeID == strokeID else { return }
+        awaitingAction = false
+        expectedActivationPID = nil
+    }
+
     func cancel() {
+        lookupWork?.cancel()
+        lookupWork = nil
+        awaitingAction = false
+        expectedActivationPID = nil
         mouseButtons.cancel()
         cancelPreview()
         strokeID = UUID()
@@ -154,7 +195,7 @@ final class GestureMonitor {
             cancel()
             swallowUntilUp = false
             guard preferences.enabled, !suspended, !event.flags.contains(.maskAlternate),
-                  let target = targetAtPoint(event.location),
+                  let target = captureTarget(event.location),
                   !preferences.excludes(target.bundleIdentifier) else { return pass }
             self.target = target
             initialFrontmostPID = frontmostApplication()?.processIdentifier
@@ -215,6 +256,7 @@ final class GestureMonitor {
             stroke = nil
             savedDown = nil
             self.target = nil
+            awaitingAction = true
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.strokeID == id else { return }
                 self.overlay.hide()
@@ -224,13 +266,35 @@ final class GestureMonitor {
                     return
                 }
                 if current.shouldReplayClick, let down, let up {
+                    self.awaitingAction = false
                     for replay in [down, up] {
                         replay.setIntegerValueField(.eventSourceUserData, value: ActionExecutor.eventTag)
-                        replay.post(tap: .cgSessionEventTap)
+                        self.postEvent(replay)
                     }
                 } else if let directions = current.recognize(minimumLength: self.preferences.minimumLength) {
-                    self.onRecognized?(directions, target)
+                    let needsWindow = self.preferences.customAction(for: directions) != nil
+                        || self.preferences.action(for: directions).requiresTargetWindow
+                    if !needsWindow {
+                        self.onRecognized?(directions, target.globalTarget)
+                        return
+                    }
+                    self.lookupWork = self.lookupTarget(target) { [weak self] resolved in
+                        guard let self, self.strokeID == id, self.preferences.enabled, !self.suspended else { return }
+                        self.lookupWork = nil
+                        guard self.frontmostApplication()?.processIdentifier == frontmostPID else {
+                            self.cancel()
+                            self.onStatus?("前台应用已切换，本次手势已取消")
+                            return
+                        }
+                        guard let resolved else {
+                            self.awaitingAction = false
+                            self.onStatus?("无法确认手势起点窗口，本次操作已取消")
+                            return
+                        }
+                        self.onRecognized?(directions, resolved)
+                    }
                 } else {
+                    self.awaitingAction = false
                     self.onStatus?("未识别手势，未执行操作")
                 }
             }

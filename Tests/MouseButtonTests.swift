@@ -155,7 +155,7 @@ extension GestureMonitor {
         checkMouse(clicks == 1, "中键不受右键收尾状态影响")
         _ = sendTrailEvent(.rightMouseUp, x: 100)
         _ = handle(type: .otherMouseDown, event: mouseEvent(.otherMouseDown))
-        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        gestureTestNotifications.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
         _ = handle(type: .otherMouseUp, event: mouseEvent(.otherMouseUp))
         drainTrailQueue()
         checkMouse(clicks == 1, "切换桌面取消中键点击")
@@ -163,7 +163,7 @@ extension GestureMonitor {
     }
 }
 GestureMonitor(preferences: mouseTestPreferences, frontmostApplication: { .current },
-               targetAtPoint: { _ in fixtureGestureTarget }).testMouseRouting()
+               captureTarget: { _ in fixtureRequest(fixtureGestureTarget) }, lookupTarget: fixtureLookup, workspaceNotifications: gestureTestNotifications).testMouseRouting()
 
 let mouseRecordingState = AppState(preferences: mouseTestPreferences, usesSystemShortcutCapture: false)
 mouseRecordingState.recordMouseShortcut(.middle)

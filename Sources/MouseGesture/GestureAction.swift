@@ -43,6 +43,18 @@ enum GestureAction: String, CaseIterable, Codable, Identifiable {
     var title: String { definition.title }
     var category: ActionCategory { definition.category }
     var usesShortcut: Bool { definition.shortcut != nil }
+    var requiresTargetWindow: Bool {
+        switch self {
+        case .none, .showDesktop, .spaceLeft, .spaceRight, .missionControl, .spotlight,
+             .finderSearch, .toggleDock, .previousInputSource, .nextInputSource, .lockScreen,
+             .accessibilityPanel, .screenshotToolbar, .screenshotFull, .screenshotArea,
+             .screenshotFullClipboard, .screenshotAreaClipboard:
+            return false
+        default:
+            // App Exposé and emoji entry still depend on the intended application/input focus.
+            return true
+        }
+    }
 
     func isAvailable(in bundleID: String?) -> Bool {
         category != .finder || bundleID == "com.apple.finder"

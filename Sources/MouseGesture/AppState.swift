@@ -74,6 +74,10 @@ final class AppState: ObservableObject {
             }
             Task { @MainActor [weak self] in
                 guard let self, isCurrent() else { return }
+                let needsWindow = self.preferences.customAction(for: directions) != nil
+                    || self.preferences.action(for: directions).requiresTargetWindow
+                guard self.monitor.beginExecution(targetPID: needsWindow ? target.pid : nil) else { return }
+                defer { self.monitor.finishExecution(strokeID: strokeID) }
                 let result: String
                 if let custom = self.preferences.customAction(for: directions) {
                     result = await ActionExecutor.execute(custom, target: target, isCurrent: isCurrent)

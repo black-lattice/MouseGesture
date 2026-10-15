@@ -68,8 +68,8 @@ PY
 
 # Exercise native recording events in a hidden test window, without posting system events.
 cat Sources/GestureCore/GestureRecognizer.swift > "$CHECK_DIR/recording.swift"
-sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,MouseButtonBinding,Preferences,ShortcutRecorder,AppState,AppState+MouseButtons,ActionExecutor,GestureTarget,MouseButtonMonitor,GestureMonitor,TrailOverlay,GestureRecordingView}.swift >> "$CHECK_DIR/recording.swift"
-cat Tests/ShortcutCaptureTests.swift Tests/GestureRecordingTests.swift Tests/TrailLifecycleTests.swift Tests/TrailRenderingTests.swift Tests/PerformanceTests.swift Tests/MouseButtonTests.swift Tests/GestureTargetTests.swift >> "$CHECK_DIR/recording.swift"
+sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,MouseButtonBinding,Preferences,ShortcutRecorder,AppState,AppState+MouseButtons,ActionExecutor,GestureTarget,GestureTargetRequest,MouseButtonMonitor,GestureMonitor,TrailOverlay,GestureRecordingView}.swift >> "$CHECK_DIR/recording.swift"
+cat Tests/ShortcutCaptureTests.swift Tests/GestureRecordingTests.swift Tests/TrailLifecycleTests.swift Tests/TrailRenderingTests.swift Tests/PerformanceTests.swift Tests/MouseButtonTests.swift Tests/GestureTargetTests.swift Tests/GestureReliabilityTests.swift >> "$CHECK_DIR/recording.swift"
 xcrun swift "$CHECK_DIR/recording.swift"
 
 for ARCH in x86_64 arm64; do

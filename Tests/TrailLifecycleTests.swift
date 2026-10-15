@@ -1,7 +1,15 @@
 // check.sh concatenates these tests with the sources so private lifecycle state can
 // be checked without exposing test hooks. No event tap or system shortcut is sent.
+private let gestureTestNotifications = NotificationCenter()
 private let fixtureGestureTarget = GestureTarget(pid: NSRunningApplication.current.processIdentifier,
                                                  window: AXUIElementCreateApplication(NSRunningApplication.current.processIdentifier))
+private func fixtureRequest(_ target: GestureTarget) -> GestureTargetRequest {
+    GestureTargetRequest(pid: target.pid, resolve: { target })
+}
+private func fixtureLookup(_ request: GestureTargetRequest, completion: @escaping (GestureTarget?) -> Void) -> DispatchWorkItem? {
+    completion(request.resolve())
+    return nil
+}
 private var trailChecks = 0
 private var trailFailures: [String] = []
 private func expectTrail(_ condition: @autoclosure () -> Bool, _ name: String) {
@@ -83,7 +91,7 @@ extension GestureMonitor {
         // External Space changes cancel drawing even when the frontmost PID is unchanged.
         _ = sendTrailEvent(.rightMouseDown, x: 100)
         _ = sendTrailEvent(.rightMouseDragged, x: 220)
-        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        gestureTestNotifications.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
         expectTrail(stroke == nil && swallowUntilUp, "桌面变化立即取消进行中的手势")
         drainTrailQueue()
         RunLoop.main.run(until: Date().addingTimeInterval(0.25))
@@ -149,7 +157,7 @@ extension GestureMonitor {
         _ = sendTrailEvent(.rightMouseDown, x: 100)
         _ = sendTrailEvent(.rightMouseDragged, x: 220)
         _ = sendTrailEvent(.rightMouseUp, x: 220)
-        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        gestureTestNotifications.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
         drainTrailQueue()
         expectTrail(recognized.count == 2 && overlay.isEmptyForTest, "桌面变化也取消已排队但尚未执行的动作")
         // A busy event stream keeps one queued draw and paints the newest points.
@@ -215,6 +223,6 @@ TrailOverlay().testImmediateHide()
 private var trailPhysicalButtonPressed = true
 GestureMonitor(preferences: trailPreferences, frontmostApplication: { .current },
                rightButtonPressed: { trailPhysicalButtonPressed },
-               targetAtPoint: { _ in fixtureGestureTarget }).testTrailLifecycle()
+               captureTarget: { _ in fixtureRequest(fixtureGestureTarget) }, lookupTarget: fixtureLookup, workspaceNotifications: gestureTestNotifications).testTrailLifecycle()
 if trailFailures.isEmpty { print("轨迹浮层生命周期测试通过：\(trailChecks) 项") }
 else { trailFailures.forEach { print("失败：\($0)") }; exit(1) }
