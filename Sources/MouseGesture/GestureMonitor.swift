@@ -4,7 +4,7 @@ import GestureCore
 
 final class GestureMonitor {
     var onStatus: ((String) -> Void)?
-    var onRecognized: (([Direction], pid_t) -> Void)?
+    var onRecognized: (([Direction], GestureTarget) -> Void)?
     var suspended = false { didSet { mouseButtons.suspended = suspended } }
     let mouseButtons: MouseButtonMonitor
     private let preferences: Preferences
@@ -13,7 +13,8 @@ final class GestureMonitor {
     private var source: CFRunLoopSource?
     private var stroke: Stroke?
     private var savedDown: CGEvent?
-    private var targetPID: pid_t = 0
+    private var target: GestureTarget?
+    private var initialFrontmostPID: pid_t?
     private var swallowUntilUp = false
     private var lastDraw: TimeInterval = 0
     private var drawPending = false
@@ -25,14 +26,18 @@ final class GestureMonitor {
     private var spaceObserver: NSObjectProtocol?
     private let frontmostApplication: () -> NSRunningApplication?
     private let rightButtonPressed: () -> Bool
+    private let targetAtPoint: (CGPoint) -> GestureTarget?
+    var currentStrokeID: UUID { strokeID }
     var isRunning: Bool { tap != nil }
 
     init(preferences: Preferences,
          frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication },
-         rightButtonPressed: @escaping () -> Bool = { CGEventSource.buttonState(.hidSystemState, button: .right) }) {
+         rightButtonPressed: @escaping () -> Bool = { CGEventSource.buttonState(.hidSystemState, button: .right) },
+         targetAtPoint: @escaping (CGPoint) -> GestureTarget? = GestureTarget.at) {
         self.preferences = preferences
         self.frontmostApplication = frontmostApplication
         self.rightButtonPressed = rightButtonPressed
+        self.targetAtPoint = targetAtPoint
         mouseButtons = MouseButtonMonitor(preferences: preferences, frontmostApplication: frontmostApplication)
         spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
@@ -83,6 +88,7 @@ final class GestureMonitor {
         if stroke != nil { swallowUntilUp = true }
         stroke = nil
         savedDown = nil
+        target = nil
         overlay.hide()
     }
 
@@ -106,7 +112,7 @@ final class GestureMonitor {
             guard self.strokeID == id, let current = self.stroke else { return }
             guard self.rightButtonPressed() else { return }
             guard self.preferences.enabled, !self.suspended,
-                  self.frontmostApplication()?.processIdentifier == self.targetPID else {
+                  self.frontmostApplication()?.processIdentifier == self.initialFrontmostPID else {
                 self.cancel()
                 return
             }
@@ -130,13 +136,13 @@ final class GestureMonitor {
         }
         if event.getIntegerValueField(.eventSourceUserData) == ActionExecutor.eventTag { return pass }
         if type == .otherMouseDown || type == .otherMouseDragged || type == .otherMouseUp {
-            if type == .otherMouseDown, stroke != nil { cancel() }
+            if type == .otherMouseDown { cancel() }
             return mouseButtons.handle(type: type, event: event) ? nil : pass
         }
         if type == .keyDown || type == .leftMouseDown {
-            mouseButtons.cancel()
-            if stroke != nil {
-                cancel()
+            let wasDrawing = stroke != nil
+            cancel()
+            if wasDrawing {
                 onStatus?("手势已取消")
                 if type == .keyDown && event.getIntegerValueField(.keyboardEventKeycode) == 53 { return nil }
             }
@@ -147,10 +153,11 @@ final class GestureMonitor {
             swallowUntilUp = false
             cancel()
             swallowUntilUp = false
-            let app = frontmostApplication()
             guard preferences.enabled, !suspended, !event.flags.contains(.maskAlternate),
-                  !preferences.excludes(app?.bundleIdentifier) else { return pass }
-            targetPID = app?.processIdentifier ?? 0
+                  let target = targetAtPoint(event.location),
+                  !preferences.excludes(target.bundleIdentifier) else { return pass }
+            self.target = target
+            initialFrontmostPID = frontmostApplication()?.processIdentifier
             stroke = Stroke(start: event.location)
             lastMotionPoint = event.location
             savedDown = event.copy()
@@ -161,7 +168,7 @@ final class GestureMonitor {
             return nil
         }
         guard stroke != nil else { return pass }
-        if !preferences.enabled || suspended || frontmostApplication()?.processIdentifier != targetPID {
+        if !preferences.enabled || suspended || frontmostApplication()?.processIdentifier != initialFrontmostPID {
             cancel()
             if type == .rightMouseUp { swallowUntilUp = false }
             return nil
@@ -199,18 +206,20 @@ final class GestureMonitor {
             }
             return nil
         }
-        if type == .rightMouseUp, let current = stroke {
+        if type == .rightMouseUp, let current = stroke, let target {
             cancelPreview()
             let down = savedDown
             let up = event.copy()
-            let pid = targetPID
+            let frontmostPID = initialFrontmostPID
             let id = strokeID
             stroke = nil
             savedDown = nil
+            self.target = nil
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.strokeID == id else { return }
                 self.overlay.hide()
-                guard self.frontmostApplication()?.processIdentifier == pid else {
+                guard self.preferences.enabled, !self.suspended,
+                      self.frontmostApplication()?.processIdentifier == frontmostPID else {
                     self.onStatus?("前台应用已切换，本次手势已取消")
                     return
                 }
@@ -220,7 +229,7 @@ final class GestureMonitor {
                         replay.post(tap: .cgSessionEventTap)
                     }
                 } else if let directions = current.recognize(minimumLength: self.preferences.minimumLength) {
-                    self.onRecognized?(directions, pid)
+                    self.onRecognized?(directions, target)
                 } else {
                     self.onStatus?("未识别手势，未执行操作")
                 }

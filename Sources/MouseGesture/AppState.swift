@@ -63,14 +63,26 @@ final class AppState: ObservableObject {
         monitor.mouseButtons.onClick = { [weak self] button, shortcut, pid in
             self?.lastResult = ActionExecutor.send(shortcut, title: button.title, targetPID: pid)
         }
-        monitor.onRecognized = { [weak self] directions, pid in
+        monitor.onRecognized = { [weak self] directions, target in
             guard let self, self.preferences.enabled,
                   self.gestureRecordingAction == nil, self.customDraft == nil else { return }
-            if let custom = self.preferences.customAction(for: directions) {
-                self.lastResult = ActionExecutor.execute(custom, targetPID: pid)
-            } else {
-                self.lastResult = ActionExecutor.execute(self.preferences.action(for: directions),
-                                                        preferences: self.preferences, targetPID: pid)
+            let strokeID = self.monitor.currentStrokeID
+            let isCurrent = { [weak self] in
+                guard let self else { return false }
+                return self.monitor.currentStrokeID == strokeID && self.preferences.enabled
+                    && !self.monitor.suspended && !self.preferences.excludes(target.bundleIdentifier)
+            }
+            Task { @MainActor [weak self] in
+                guard let self, isCurrent() else { return }
+                let result: String
+                if let custom = self.preferences.customAction(for: directions) {
+                    result = await ActionExecutor.execute(custom, target: target, isCurrent: isCurrent)
+                } else {
+                    result = await ActionExecutor.execute(self.preferences.action(for: directions),
+                                                          preferences: self.preferences, target: target,
+                                                          isCurrent: isCurrent)
+                }
+                if isCurrent() { self.lastResult = result }
             }
         }
         refreshPermission()

@@ -18,11 +18,11 @@ enum ActionCategory: String, CaseIterable, Identifiable {
         switch self {
         case .system: return "快捷键需在系统设置中启用并保持一致；切换桌面需要已创建多个桌面。"
         case .screenshots: return "使用 macOS 截屏功能；录屏需在截屏工具栏中选择。"
-        case .windows: return "作用于前台应用；部分功能需要应用支持。关闭窗口直接操作窗口关闭按钮。"
-        case .editing: return "作用于前台应用及当前选中内容，具体行为由目标应用决定。"
+        case .windows: return "作用于手势开始位置的窗口；部分功能需要应用支持。关闭窗口直接操作该窗口关闭按钮。"
+        case .editing: return "作用于手势开始位置的窗口及其中选中内容，具体行为由目标应用决定。"
         case .navigation: return "适用于支持这些快捷键的浏览器或应用；如需其他组合，请添加自定义功能。"
-        case .finder: return "仅当前台应用为访达时执行，作用于当前窗口或已选中的文件。"
-        case .custom: return "应用内快捷键作用于当前前台应用；全局快捷键由注册它的软件处理。请确保对应软件正在运行。"
+        case .finder: return "仅在访达窗口中绘制时执行，作用于该窗口或其中已选中的文件。"
+        case .custom: return "应用内快捷键作用于手势开始位置的窗口；全局快捷键由注册它的软件处理。请确保对应软件正在运行。"
         }
     }
 }

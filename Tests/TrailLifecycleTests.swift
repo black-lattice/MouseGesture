@@ -1,5 +1,7 @@
 // check.sh concatenates these tests with the sources so private lifecycle state can
 // be checked without exposing test hooks. No event tap or system shortcut is sent.
+private let fixtureGestureTarget = GestureTarget(pid: NSRunningApplication.current.processIdentifier,
+                                                 window: AXUIElementCreateApplication(NSRunningApplication.current.processIdentifier))
 private var trailChecks = 0
 private var trailFailures: [String] = []
 private func expectTrail(_ condition: @autoclosure () -> Bool, _ name: String) {
@@ -212,6 +214,7 @@ TrailOverlay().testImmediateHide()
 // CI may have no foreground app. Keep the fixture independent of the runner's desktop.
 private var trailPhysicalButtonPressed = true
 GestureMonitor(preferences: trailPreferences, frontmostApplication: { .current },
-               rightButtonPressed: { trailPhysicalButtonPressed }).testTrailLifecycle()
+               rightButtonPressed: { trailPhysicalButtonPressed },
+               targetAtPoint: { _ in fixtureGestureTarget }).testTrailLifecycle()
 if trailFailures.isEmpty { print("轨迹浮层生命周期测试通过：\(trailChecks) 项") }
 else { trailFailures.forEach { print("失败：\($0)") }; exit(1) }

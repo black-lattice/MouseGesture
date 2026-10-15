@@ -162,7 +162,8 @@ extension GestureMonitor {
         stop()
     }
 }
-GestureMonitor(preferences: mouseTestPreferences, frontmostApplication: { .current }).testMouseRouting()
+GestureMonitor(preferences: mouseTestPreferences, frontmostApplication: { .current },
+               targetAtPoint: { _ in fixtureGestureTarget }).testMouseRouting()
 
 let mouseRecordingState = AppState(preferences: mouseTestPreferences, usesSystemShortcutCapture: false)
 mouseRecordingState.recordMouseShortcut(.middle)
