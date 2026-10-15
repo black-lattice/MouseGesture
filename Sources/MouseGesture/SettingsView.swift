@@ -53,7 +53,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 } header: { Text("排除应用") }
                 Section {
-                    Button("重置手势和快捷键…") { state.stopRecording(); confirmReset = true }
+                    Button("重置手势和快捷键") { state.stopRecording(); confirmReset = true }
                 }
             }
             .formStyle(.grouped)

@@ -66,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let toggle = menu.addItem(withTitle: state.preferences.enabled ? "暂停手势" : "启用手势",
                                   action: #selector(toggleEnabled), keyEquivalent: "")
         toggle.target = self
-        let settings = menu.addItem(withTitle: "设置…", action: #selector(showSettings), keyEquivalent: ",")
+        let settings = menu.addItem(withTitle: "设置", action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "退出 MouseGesture", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
