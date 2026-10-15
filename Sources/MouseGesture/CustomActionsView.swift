@@ -164,9 +164,9 @@ private struct CustomActionEditorView: View {
                 Label(error, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.red)
             }
             if recordingGesture {
-                Text("在下方区域按住右键绘制，支持上下左右直线或最多四段折线。录制成功后点击本行“保存”启用。")
+                Text("在下方区域按住\(preferences.triggerTitle)绘制，支持上下左右直线或最多四段折线。录制成功后点击本行“保存”启用。")
                     .font(.callout).foregroundStyle(.secondary)
-                GestureRecordingPad(minimumLength: preferences.minimumLength, onStart: {
+                GestureRecordingPad(minimumLength: preferences.minimumLength, triggerButton: preferences.triggerButton, onStart: {
                     state.stopCustomShortcutRecording()
                     draft.directions = []
                     draft.gestureError = nil

@@ -13,7 +13,7 @@ enum ActionExecutor {
         guard action != .none else { return "此轨迹未绑定操作" }
         guard permissionCheck() else { return "辅助功能权限不可用" }
         guard isCurrent() else { return "手势已取消" }
-        if !action.requiresTargetWindow, let shortcut = preferences.shortcut(for: action) {
+        if !action.requiresTargetWindow, let shortcut = preferences.shortcut(for: action, bundleID: target.bundleIdentifier) {
             // Global actions must not activate windows or exit Show Desktop first.
             return sendShortcut(shortcut, action.title, nil)
         }
@@ -21,8 +21,12 @@ enum ActionExecutor {
         guard action.isAvailable(in: target.bundleIdentifier) else {
             return "请在访达窗口中使用“\(action.title)”"
         }
+        if action.isWindowLayout, let window = target.window {
+            guard await target.focus(while: isCurrent), isCurrent(), target.isFocused else { return "未能聚焦手势目标窗口，本次操作已取消" }
+            return WindowLayout.apply(action, to: window)
+        }
         if action == .closeWindow, let window = target.window { return closeWindow(window) }
-        guard let shortcut = preferences.shortcut(for: action) else { return "此功能未设置快捷键" }
+        guard let shortcut = preferences.shortcut(for: action, bundleID: target.bundleIdentifier) else { return "此功能未设置快捷键" }
         return await send(shortcut, title: action.title, target: target, isCurrent: isCurrent,
                           sendShortcut: sendShortcut)
     }

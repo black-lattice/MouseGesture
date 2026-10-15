@@ -11,7 +11,7 @@ func expect(_ condition: @autoclosure () -> Bool, _ name: String) {
 
 let preferences = Preferences(defaults: defaults)
 expect(preferences.bindings.isEmpty, "新用户需要自行录制，没有预设手势")
-expect(GestureAction.available.count == 60 && !GestureAction.available.contains(.none), "列出六类共六十项功能，不包括空操作")
+expect(GestureAction.available.count == 65 && !GestureAction.available.contains(.none), "列出六类共六十五项功能，不包括空操作")
 expect(preferences.bind([.right, .down, .left], to: .showDesktop), "支持原八种预设以外的手势")
 expect(preferences.action(for: [.right, .down, .left]) == .showDesktop, "录制的手势可以解析到操作")
 expect(Preferences(defaults: defaults).action(for: [.right, .down, .left]) == .showDesktop, "录制后重载仍保留绑定")
@@ -53,7 +53,7 @@ for (action, pattern) in zip(GestureAction.available, patterns) {
 }
 let catalogReload = Preferences(defaults: defaults)
 expect(zip(GestureAction.available, patterns).allSatisfy { catalogReload.action(for: $0.1) == $0.0 },
-       "重载后全部六十项功能仍可通过对应手势找到")
+       "重载后全部六十五项功能仍可通过对应手势找到")
 
 // Same preferences.v1 schema used by the previous release, including multiple gestures per action.
 let legacy: [String: Any] = [

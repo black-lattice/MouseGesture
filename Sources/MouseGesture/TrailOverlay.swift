@@ -4,13 +4,13 @@ final class TrailOverlay {
     private var panels: [NSPanel] = []
     private var views: [TrailView] = []
 
-    func show(points: [CGPoint], label: String) {
+    func show(points: [CGPoint], label: String, color: NSColor = .systemTeal, width: CGFloat = 4, showTrail: Bool = true) {
         if panels.isEmpty { prepare() }
         let primaryTop = NSScreen.screens.first?.frame.maxY ?? 0
         for (panel, view) in zip(panels, views) {
             view.update(points: points.map {
                 CGPoint(x: $0.x - panel.frame.minX, y: primaryTop - $0.y - panel.frame.minY)
-            }, label: label)
+            }, label: label, color: color, width: width, showTrail: showTrail)
             if view.drawingBounds.isEmpty {
                 if panel.isVisible { panel.orderOut(nil) }
             } else if !panel.isVisible {
@@ -60,6 +60,9 @@ final class TrailOverlay {
 private final class TrailView: NSView {
     private(set) var points: [CGPoint] = []
     private var label = ""
+    private var color = NSColor.systemTeal
+    private var width: CGFloat = 4
+    private var showTrail = true
     private var path = NSBezierPath()
     private var labelBox: CGRect?
     private var labelTextHeight: CGFloat = 0
@@ -70,14 +73,18 @@ private final class TrailView: NSView {
 
     // Return the invalidated area so isolated rendering tests can compare partial and full draws.
     @discardableResult
-    func update(points: [CGPoint], label: String) -> CGRect {
+    func update(points: [CGPoint], label: String, color: NSColor = .systemTeal, width: CGFloat = 4, showTrail: Bool = true) -> CGRect {
         let pointsChanged = self.points != points
-        guard pointsChanged || self.label != label else { return .null }
+        let styleChanged = self.color != color || self.width != width || self.showTrail != showTrail
+        guard pointsChanged || self.label != label || styleChanged else { return .null }
+        self.color = color
+        self.width = width
+        self.showTrail = showTrail
         let previousBounds = drawingBounds
-        if pointsChanged {
+        if pointsChanged || styleChanged {
             self.points = points
             path = NSBezierPath()
-            path.lineWidth = 4
+            path.lineWidth = width
             path.lineCapStyle = .round
             path.lineJoinStyle = .round
             if let first = points.first {
@@ -97,7 +104,7 @@ private final class TrailView: NSView {
                               width: size.width + 24, height: height)
         }
         // Include stroke caps/antialiasing and the old label, so moving/shortening it leaves no residue.
-        let trailBounds = points.count < 2 ? CGRect.null : path.bounds.insetBy(dx: -4, dy: -4)
+        let trailBounds = !showTrail || points.count < 2 ? CGRect.null : path.bounds.insetBy(dx: -(width / 2 + 2), dy: -(width / 2 + 2))
         drawingBounds = trailBounds.union(labelBox?.insetBy(dx: -1, dy: -1) ?? .null).intersection(bounds)
         let dirty = previousBounds.union(drawingBounds).integral.intersection(bounds)
         if !dirty.isNull && !dirty.isEmpty { setNeedsDisplay(dirty) }
@@ -110,8 +117,8 @@ private final class TrailView: NSView {
         NSBezierPath(rect: dirtyRect).addClip()
         NSColor.clear.setFill()
         dirtyRect.fill(using: .copy)
-        NSColor.systemTeal.setStroke()
-        path.stroke()
+        color.setStroke()
+        if showTrail { path.stroke() }
         guard let box = labelBox else { return }
         NSColor.black.withAlphaComponent(0.82).setFill()
         NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8).fill()

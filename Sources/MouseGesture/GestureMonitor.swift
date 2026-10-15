@@ -29,7 +29,8 @@ final class GestureMonitor {
     private var awaitingAction = false
     private var expectedActivationPID: pid_t?
     private let frontmostApplication: () -> NSRunningApplication?
-    private let rightButtonPressed: () -> Bool
+    private let rightButtonPressed: (() -> Bool)?
+    private var strokeButton: Int64?
     private let captureTarget: (CGPoint) -> GestureTargetRequest?
     private let lookupTarget: (GestureTargetRequest, @escaping (GestureTarget?) -> Void) -> DispatchWorkItem?
     private let postEvent: (CGEvent) -> Void
@@ -39,7 +40,7 @@ final class GestureMonitor {
 
     init(preferences: Preferences,
          frontmostApplication: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication },
-         rightButtonPressed: @escaping () -> Bool = { CGEventSource.buttonState(.hidSystemState, button: .right) },
+         rightButtonPressed: (() -> Bool)? = nil,
          captureTarget: @escaping (CGPoint) -> GestureTargetRequest? = GestureTargetRequest.capture,
          lookupTarget: @escaping (GestureTargetRequest, @escaping (GestureTarget?) -> Void) -> DispatchWorkItem? = GestureTargetRequest.lookup,
          postEvent: @escaping (CGEvent) -> Void = { $0.post(tap: .cgSessionEventTap) },
@@ -76,6 +77,8 @@ final class GestureMonitor {
     func start() -> Bool {
         if tap != nil { return true }
         guard AXIsProcessTrusted() else { return false }
+        strokeButton = nil
+        swallowUntilUp = false
         let types: [CGEventType] = [.rightMouseDown, .rightMouseDragged, .rightMouseUp, .keyDown, .leftMouseDown,
                                     .otherMouseDown, .otherMouseDragged, .otherMouseUp]
         let mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
@@ -151,21 +154,27 @@ final class GestureMonitor {
             guard let self else { return }
             self.previewTimer = nil
             guard self.strokeID == id, let current = self.stroke else { return }
-            guard self.rightButtonPressed() else { return }
+            let button = CGMouseButton(rawValue: UInt32(self.strokeButton ?? self.preferences.triggerButton))!
+            guard self.rightButtonPressed?() ?? CGEventSource.buttonState(.hidSystemState, button: button) else { return }
             guard self.preferences.enabled, !self.suspended,
                   self.frontmostApplication()?.processIdentifier == self.initialFrontmostPID else {
                 self.cancel()
                 return
             }
-            guard self.preferences.showTrail else { self.overlay.hide(); return }
+            guard self.preferences.showHint else { return }
             self.previewLabel = current.recognize(minimumLength: self.preferences.minimumLength).map { sequence in
-                sequence.map(\.arrow).joined(separator: " ") + "  " + self.preferences.title(for: sequence)
+                sequence.map(\.arrow).joined(separator: " ") + "  " + self.preferences.title(for: sequence, bundleID: self.target?.bundleIdentifier)
             } ?? "未识别手势 · 继续绘制 · Esc 取消"
             self.lastDrawnPointCount = current.points.count
-            self.overlay.show(points: current.points, label: self.previewLabel)
+            self.drawOverlay(current.points)
         }
         previewTimer = timer
         RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func drawOverlay(_ points: [CGPoint]) {
+        overlay.show(points: points, label: preferences.showHint ? previewLabel : "",
+                     color: preferences.trailColor.color, width: preferences.trailWidth, showTrail: preferences.showTrail)
     }
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -176,9 +185,20 @@ final class GestureMonitor {
             return pass
         }
         if event.getIntegerValueField(.eventSourceUserData) == ActionExecutor.eventTag { return pass }
-        if type == .otherMouseDown || type == .otherMouseDragged || type == .otherMouseUp {
-            if type == .otherMouseDown { cancel() }
-            return mouseButtons.handle(type: type, event: event) ? nil : pass
+        let isRight = [.rightMouseDown, .rightMouseDragged, .rightMouseUp].contains(type)
+        let isOther = [.otherMouseDown, .otherMouseDragged, .otherMouseUp].contains(type)
+        let number = isRight ? 1 : event.getIntegerValueField(.mouseEventButtonNumber)
+        var type = type
+        if isRight || isOther {
+            if number != (strokeButton ?? preferences.triggerButton) {
+                if type == .otherMouseDown || type == .rightMouseDown { cancel() }
+                return isOther && mouseButtons.handle(type: type, event: event) ? nil : pass
+            }
+            if isOther {
+                if type == .otherMouseDown { type = .rightMouseDown }
+                else if type == .otherMouseDragged { type = .rightMouseDragged }
+                else { type = .rightMouseUp }
+            }
         }
         if type == .keyDown || type == .leftMouseDown {
             let wasDrawing = stroke != nil
@@ -197,6 +217,7 @@ final class GestureMonitor {
             guard preferences.enabled, !suspended, !event.flags.contains(.maskAlternate),
                   let target = captureTarget(event.location),
                   !preferences.excludes(target.bundleIdentifier) else { return pass }
+            strokeButton = number
             self.target = target
             initialFrontmostPID = frontmostApplication()?.processIdentifier
             stroke = Stroke(start: event.location)
@@ -205,13 +226,13 @@ final class GestureMonitor {
             return nil
         }
         if swallowUntilUp {
-            if type == .rightMouseUp { swallowUntilUp = false }
+            if type == .rightMouseUp { swallowUntilUp = false; strokeButton = nil }
             return nil
         }
         guard stroke != nil else { return pass }
         if !preferences.enabled || suspended || frontmostApplication()?.processIdentifier != initialFrontmostPID {
             cancel()
-            if type == .rightMouseUp { swallowUntilUp = false }
+            if type == .rightMouseUp { swallowUntilUp = false; strokeButton = nil }
             return nil
         }
         stroke?.append(event.location)
@@ -227,10 +248,10 @@ final class GestureMonitor {
                     lastDrawnPointCount = 0
                     lastDraw = 0
                 }
-                if stroke?.isGesture == true, preferences.showTrail { schedulePreview() }
+                if stroke?.isGesture == true, preferences.showHint { schedulePreview() }
             }
             let now = ProcessInfo.processInfo.systemUptime
-            if stroke?.isGesture == true, preferences.showTrail, stroke?.points.count != lastDrawnPointCount,
+            if stroke?.isGesture == true, (preferences.showTrail || preferences.showHint), stroke?.points.count != lastDrawnPointCount,
                !drawPending, now - lastDraw >= 1.0 / 60 {
                 drawPending = true
                 lastDraw = now
@@ -239,15 +260,16 @@ final class GestureMonitor {
                 DispatchQueue.main.async { [weak self] in
                     guard let self, self.strokeID == id else { return }
                     self.drawPending = false
-                    guard let current = self.stroke, self.preferences.showTrail else { return }
+                    guard let current = self.stroke, self.preferences.showTrail || self.preferences.showHint else { return }
                     self.lastDrawnPointCount = current.points.count
                     // Moving only draws; matching happens once the mouse has been still for 200 ms.
-                    self.overlay.show(points: current.points, label: self.previewLabel)
+                    self.drawOverlay(current.points)
                 }
             }
             return nil
         }
         if type == .rightMouseUp, let current = stroke, let target {
+            strokeButton = nil
             cancelPreview()
             let down = savedDown
             let up = event.copy()
@@ -272,8 +294,8 @@ final class GestureMonitor {
                         self.postEvent(replay)
                     }
                 } else if let directions = current.recognize(minimumLength: self.preferences.minimumLength) {
-                    let needsWindow = self.preferences.customAction(for: directions) != nil
-                        || self.preferences.action(for: directions).requiresTargetWindow
+                    let needsWindow = self.preferences.customAction(for: directions, bundleID: target.bundleIdentifier) != nil
+                        || self.preferences.action(for: directions, bundleID: target.bundleIdentifier).requiresTargetWindow
                     if !needsWindow {
                         self.onRecognized?(directions, target.globalTarget)
                         return

@@ -13,10 +13,11 @@ enum MouseGestureApp {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     private let state = AppState()
     private var statusItem: NSStatusItem?
     private var window: NSWindow?
+    private var referenceWindow: NSWindow?
     private var subscriptions: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -36,7 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }.store(in: &subscriptions)
         state.start()
         updateMenu()
-        showSettings()
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        let isLogin = event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+        if !isLogin { showSettings() }
     }
 
     private func installMainMenu() {
@@ -59,6 +62,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func updateMenu() {
         let menu = NSMenu()
+        menu.delegate = self
+        populateMenu(menu)
+        statusItem?.menu = menu
+        statusItem?.button?.appearsDisabled = !state.preferences.enabled || !state.running
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) { populateMenu(menu) }
+
+    private func populateMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
         let title = !state.preferences.enabled ? "手势已暂停" : (state.running ? "手势运行中" : "等待授权 / 监听不可用")
         let status = menu.addItem(withTitle: title, action: nil, keyEquivalent: "")
         status.isEnabled = false
@@ -68,10 +81,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         toggle.target = self
         let settings = menu.addItem(withTitle: "设置", action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self
+        let current = NSWorkspace.shared.frontmostApplication
+        let bundleID = current?.bundleIdentifier
+        let reference = menu.addItem(withTitle: "手势速查", action: #selector(showReference(_:)), keyEquivalent: "")
+        reference.target = self
+        reference.representedObject = bundleID == Preferences.domain ? nil : bundleID
+        if let bundleID, bundleID != Preferences.domain {
+            let excluded = state.preferences.excludes(bundleID)
+            let name = current?.localizedName ?? bundleID
+            let exclude = menu.addItem(withTitle: "\(excluded ? "启用" : "停用")“\(name)”的手势",
+                                       action: #selector(toggleExcluded(_:)), keyEquivalent: "")
+            exclude.target = self
+            exclude.representedObject = bundleID
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "退出 MouseGesture", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        statusItem?.menu = menu
-        statusItem?.button?.appearsDisabled = !state.preferences.enabled || !state.running
+    }
+
+    @objc private func toggleExcluded(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        state.monitor.cancel()
+        state.preferences.setExcluded(id, excluded: !state.preferences.excludes(id))
+    }
+
+    @objc private func showReference(_ sender: NSMenuItem) {
+        if referenceWindow == nil {
+            let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 540),
+                                 styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+            panel.title = "MouseGesture 手势速查"
+            panel.isReleasedWhenClosed = false
+            panel.minSize = NSSize(width: 480, height: 390)
+            panel.center()
+            referenceWindow = panel
+        }
+        referenceWindow?.contentView = NSHostingView(rootView: GestureReferenceView(preferences: state.preferences,
+                                                                                   bundleID: sender.representedObject as? String))
+        NSApp.activate(ignoringOtherApps: true)
+        referenceWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func toggleEnabled() {

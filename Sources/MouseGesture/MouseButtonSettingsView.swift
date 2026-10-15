@@ -18,7 +18,7 @@ struct MouseButtonSettingsView: View {
                                 .frame(maxWidth: .infinity).lineLimit(1).minimumScaleFactor(0.8)
                         }
                         .frame(width: ActionRowLayout.shortcutWidth)
-                        .disabled(state.recordingMouseShortcut == button)
+                        .disabled(state.recordingMouseShortcut == button || binding.buttonNumber == preferences.triggerButton)
                         .accessibilityLabel("录入\(button.title)快捷键")
                         Button("识别按键") { state.recordMouseButton(button) }
                             .disabled(state.recordingMouseButton == button)
@@ -30,6 +30,16 @@ struct MouseButtonSettingsView: View {
                         }
                         .disabled(binding.shortcut == nil)
                         .accessibilityLabel("清除\(button.title)快捷键并恢复原功能")
+                    }
+                    if binding.buttonNumber == preferences.triggerButton {
+                        Text("此按键正用作手势绘制，快捷键暂不执行。更换触发键后自动恢复。")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                    if !preferences.editingBundleID.isEmpty, preferences.mouseBindings[button.rawValue] != nil {
+                        Button("恢复全局绑定") {
+                            state.stopRecording()
+                            preferences.mouseBindings.removeValue(forKey: button.rawValue)
+                        }
                     }
                     if state.recordingMouseShortcut == button || state.recordingMouseButton == button {
                         HStack {

@@ -14,15 +14,41 @@ final class Preferences: ObservableObject {
     @Published var enabled = true { didSet { save() } }
     @Published var showTrail = true { didSet { save() } }
     @Published var minimumLength: Double = 50 { didSet { save() } }
-    @Published var bindings: [GestureBinding] = [] { didSet { save() } }
-    @Published var shortcuts: [String: KeyboardShortcut] = [:] { didSet { save() } }
-    @Published var mouseBindings: [String: MouseButtonBinding] = [:] { didSet { save() } }
+    @Published var globalProfile = ApplicationProfile() { didSet { save() } }
+    @Published var profiles: [String: ApplicationProfile] = [:] { didSet { save() } }
+    @Published var editingBundleID = ""
+    @Published var triggerButton: Int64 = 1 { didSet { save() } }
+    @Published var showHint = true { didSet { save() } }
+    @Published var trailColor = TrailColor.teal { didSet { save() } }
+    @Published var trailWidth: Double = 4 { didSet { save() } }
+    var bindings: [GestureBinding] {
+        get { editingProfile.bindings }
+        set { editingProfile.bindings = newValue }
+    }
+    var shortcuts: [String: KeyboardShortcut] {
+        get { editingProfile.shortcuts }
+        set { editingProfile.shortcuts = newValue }
+    }
+    var mouseBindings: [String: MouseButtonBinding] {
+        get { editingProfile.mouseBindings }
+        set { editingProfile.mouseBindings = newValue }
+    }
     @Published var excludedBundleIDs = "" { didSet { save() } }
-    @Published private(set) var customActions: [CustomAction] = [] { didSet { save() } }
+    var customActions: [CustomAction] {
+        get { editingProfile.customActions }
+        set { editingProfile.customActions = newValue }
+    }
+    var editingProfile: ApplicationProfile {
+        get { editingBundleID.isEmpty ? globalProfile : profiles[editingBundleID] ?? ApplicationProfile() }
+        set {
+            if editingBundleID.isEmpty { globalProfile = newValue }
+            else { profiles[editingBundleID] = newValue }
+        }
+    }
     private let defaults: UserDefaults
     private var isLoading = true
 
-    private struct Saved: Codable {
+    struct Saved: Codable {
         var enabled: Bool
         var showTrail: Bool
         var minimumLength: Double
@@ -31,6 +57,11 @@ final class Preferences: ObservableObject {
         var excludedBundleIDs: String
         var customActions: [CustomAction]?
         var mouseBindings: [String: MouseButtonBinding]?
+        var profiles: [String: ApplicationProfile]?
+        var triggerButton: Int64?
+        var showHint: Bool?
+        var trailColor: TrailColor?
+        var trailWidth: Double?
     }
 
     convenience init(domain: String = Preferences.domain, legacyDomain: String? = "MouseGesture") {
@@ -58,6 +89,11 @@ final class Preferences: ObservableObject {
             excludedBundleIDs = value.excludedBundleIDs
             customActions = value.customActions ?? []
             mouseBindings = value.mouseBindings ?? [:]
+            profiles = value.profiles ?? [:]
+            triggerButton = (1...31).contains(value.triggerButton ?? 1) ? value.triggerButton ?? 1 : 1
+            showHint = value.showHint ?? value.showTrail
+            trailColor = value.trailColor ?? .teal
+            trailWidth = min(10, max(2, value.trailWidth ?? 4))
         }
         // Preserve installed settings; recover missing custom actions only once.
         for var action in legacy?.customActions ?? [] {
@@ -171,15 +207,36 @@ final class Preferences: ObservableObject {
         bindings = []
         shortcuts = [:]
         mouseBindings = [:]
-        minimumLength = 50
+        if editingBundleID.isEmpty { minimumLength = 50 }
         customActions = customActions.map { var action = $0; action.pattern = ""; return action }
+    }
+
+    var snapshot: Saved {
+        Saved(enabled: enabled, showTrail: showTrail, minimumLength: minimumLength,
+              bindings: globalProfile.bindings, shortcuts: globalProfile.shortcuts, excludedBundleIDs: excludedBundleIDs,
+              customActions: globalProfile.customActions, mouseBindings: globalProfile.mouseBindings,
+              profiles: profiles, triggerButton: triggerButton, showHint: showHint, trailColor: trailColor, trailWidth: trailWidth)
+    }
+
+    func apply(_ value: Saved) {
+        isLoading = true
+        globalProfile = ApplicationProfile(bindings: value.bindings, shortcuts: value.shortcuts,
+                                           customActions: value.customActions ?? [], mouseBindings: value.mouseBindings ?? [:])
+        profiles = value.profiles ?? [:]
+        excludedBundleIDs = value.excludedBundleIDs
+        showTrail = value.showTrail
+        showHint = value.showHint ?? value.showTrail
+        minimumLength = value.minimumLength
+        triggerButton = value.triggerButton ?? 1
+        trailColor = value.trailColor ?? .teal
+        trailWidth = value.trailWidth ?? 4
+        editingBundleID = ""
+        isLoading = false
+        save()
     }
 
     private func save() {
         guard !isLoading else { return }
-        let value = Saved(enabled: enabled, showTrail: showTrail, minimumLength: minimumLength,
-                          bindings: bindings, shortcuts: shortcuts, excludedBundleIDs: excludedBundleIDs,
-                          customActions: customActions, mouseBindings: mouseBindings)
-        if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: "preferences.v1") }
+        if let data = try? JSONEncoder().encode(snapshot) { defaults.set(data, forKey: "preferences.v1") }
     }
 }

@@ -97,8 +97,8 @@ struct ActionListView: View {
                     .accessibilityLabel("\(action.title)快捷键，只读")
                     .help("内置功能快捷键不可修改；需要其他组合时可添加自定义功能")
             } else {
-                Text("窗口关闭按钮").font(.callout).foregroundStyle(.secondary)
-                    .frame(width: ActionRowLayout.shortcutWidth).help("直接点击当前窗口的关闭按钮，无需快捷键")
+                Text(action.isWindowLayout ? "窗口布局" : "窗口关闭按钮").font(.callout).foregroundStyle(.secondary)
+                    .frame(width: ActionRowLayout.shortcutWidth).help(action.isWindowLayout ? "直接调整目标窗口的位置和大小" : "直接点击当前窗口的关闭按钮，无需快捷键")
             }
             Button {
                 state.recordGesture(action)

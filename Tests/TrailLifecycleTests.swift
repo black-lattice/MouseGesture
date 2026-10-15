@@ -185,6 +185,7 @@ extension GestureMonitor {
         lastDraw = 0
         _ = sendTrailEvent(.rightMouseDragged, x: 600)
         preferences.showTrail = false
+        preferences.showHint = false
         overlay.hide()
         drainTrailQueue()
         expectTrail(overlay.isEmptyForTest, "关闭轨迹后旧绘制任务不会重新显示浮层")
@@ -195,6 +196,7 @@ extension GestureMonitor {
         drainTrailQueue()
         expectTrail(overlay.isEmptyForTest, "关闭显示选项后，松开也不显示提示")
         preferences.showTrail = true
+        preferences.showHint = true
         cancel()
 
         let callback = onRecognized

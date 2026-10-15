@@ -26,7 +26,9 @@ struct MouseButtonBinding: Codable, Equatable {
 
 extension Preferences {
     func mouseBinding(for button: MouseButton) -> MouseButtonBinding {
-        mouseBindings[button.rawValue] ?? MouseButtonBinding(buttonNumber: button.defaultNumber)
+        var binding = mouseBindings[button.rawValue] ?? globalProfile.mouseBindings[button.rawValue] ?? MouseButtonBinding(buttonNumber: button.defaultNumber)
+        binding.buttonNumber = globalProfile.mouseBindings[button.rawValue]?.buttonNumber ?? button.defaultNumber
+        return binding
     }
 
     func setMouseShortcut(_ shortcut: KeyboardShortcut?, for button: MouseButton) {
@@ -38,17 +40,17 @@ extension Preferences {
     @discardableResult
     func setMouseButtonNumber(_ number: Int64, for button: MouseButton) -> Bool {
         guard (2...31).contains(number) else { return false }
-        var updated = mouseBindings
-        var binding = mouseBinding(for: button)
+        var updated = globalProfile.mouseBindings
+        var binding = globalProfile.mouseBindings[button.rawValue] ?? MouseButtonBinding(buttonNumber: button.defaultNumber)
         // Swap physical buttons so opposite side-button numbering never creates duplicates.
-        if let other = MouseButton.allCases.first(where: { $0 != button && mouseBinding(for: $0).buttonNumber == number }) {
-            var otherBinding = mouseBinding(for: other)
+        if let other = MouseButton.allCases.first(where: { $0 != button && (globalProfile.mouseBindings[$0.rawValue]?.buttonNumber ?? $0.defaultNumber) == number }) {
+            var otherBinding = globalProfile.mouseBindings[other.rawValue] ?? MouseButtonBinding(buttonNumber: other.defaultNumber)
             otherBinding.buttonNumber = binding.buttonNumber
             updated[other.rawValue] = otherBinding
         }
         binding.buttonNumber = number
         updated[button.rawValue] = binding
-        mouseBindings = updated
+        globalProfile.mouseBindings = updated
         return true
     }
 }

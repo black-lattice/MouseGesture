@@ -24,7 +24,7 @@ struct SettingsView: View {
                     Label(statusText, systemImage: state.running && preferences.enabled ? "checkmark.circle.fill" : "pause.circle")
                         .foregroundStyle(state.running && preferences.enabled ? Color.teal : Color.secondary)
                     if !state.trusted {
-                        Text("需要辅助功能权限以识别全局右键手势、鼠标按键并执行操作。授权后会自动开始监听。")
+                        Text("需要辅助功能权限以识别全局鼠标手势、鼠标按键并执行操作。授权后会自动开始监听。")
                             .foregroundStyle(.secondary)
                         Button("打开辅助功能设置") { state.requestPermission() }
                     } else if !state.running && preferences.enabled {
@@ -34,35 +34,43 @@ struct SettingsView: View {
                     }
                     LabeledContent("最近操作", value: state.lastResult)
                 }
+                GeneralSettingsView(state: state, preferences: preferences)
+                ApplicationProfileView(state: state, preferences: preferences)
                 MouseButtonSettingsView(state: state, preferences: preferences)
                 ActionListView(state: state, preferences: preferences)
                 Section("识别与显示") {
-                    Toggle("显示轨迹与操作提示", isOn: $preferences.showTrail)
+                    Toggle("显示轨迹", isOn: $preferences.showTrail)
+                    Toggle("显示停顿操作提示", isOn: $preferences.showHint)
+                    Picker("轨迹颜色", selection: $preferences.trailColor) {
+                        ForEach(TrailColor.allCases) { Text($0.title).tag($0) }
+                    }
+                    LabeledContent("轨迹粗细 \(Int(preferences.trailWidth)) 点") {
+                        Slider(value: $preferences.trailWidth, in: 2...10, step: 1).frame(width: 220)
+                            .accessibilityLabel("轨迹粗细")
+                    }
+                    RoundedRectangle(cornerRadius: 5).fill(Color(nsColor: preferences.trailColor.color))
+                        .frame(width: 160, height: preferences.trailWidth).padding(.vertical, 6)
+                        .accessibilityLabel("轨迹颜色和粗细预览")
                     LabeledContent("最短轨迹 \(Int(preferences.minimumLength)) 点") {
                         Slider(value: $preferences.minimumLength, in: 30...140, step: 10)
                             .frame(width: 220).accessibilityLabel("最短轨迹长度")
                     }
-                    Text("普通右键点击会在松开时弹出菜单。按住 Option 再按右键可使用原生右键拖拽。绘制中按 Esc 取消。")
+                    Text("绘制键的普通点击在松开时补发。按住 Option 再按绘制键可使用原生拖动。绘制中按 Esc 取消。")
                         .foregroundStyle(.secondary)
                 }
+                ExcludedApplicationsView(state: state, preferences: preferences)
+                ConfigurationTransferView(state: state, preferences: preferences)
                 Section {
-                    TextField("应用 Bundle ID，以空格或逗号分隔", text: $preferences.excludedBundleIDs, axis: .vertical)
-                        .lineLimit(2...4)
-                        .textFieldStyle(.roundedBorder)
-                    Text("例如 com.apple.Safari。排除的前台应用中，右键和鼠标按键均保持原生行为。")
-                        .foregroundStyle(.secondary)
-                } header: { Text("排除应用") }
-                Section {
-                    Button("重置手势和快捷键") { state.stopRecording(); confirmReset = true }
+                    Button("重置当前配置的手势和快捷键") { state.stopRecording(); confirmReset = true }
                 }
             }
             .formStyle(.grouped)
         }
         .frame(minWidth: 740, minHeight: 660)
-        .alert("重置手势和快捷键？", isPresented: $confirmReset) {
+        .alert("重置当前配置的手势和快捷键？", isPresented: $confirmReset) {
             Button("取消", role: .cancel) {}
             Button("重置", role: .destructive) { state.stopRecording(); preferences.restoreDefaults() }
-        } message: { Text("将清除所有手势与鼠标按键绑定，并恢复内置功能的默认快捷键和最短轨迹长度。自定义功能的名称和快捷键保留，之后需要重新录制手势。") }
+        } message: { Text("将清除当前编辑配置的手势与鼠标按键绑定，并恢复内置快捷键；重置全局配置时也恢复最短轨迹长度。自定义功能的名称和快捷键保留，之后需要重新录制手势。") }
         .onDisappear { state.stopRecording() }
     }
 
@@ -74,6 +82,6 @@ struct SettingsView: View {
         if !state.trusted { return "等待辅助功能授权" }
         if !preferences.enabled { return "手势与按键已暂停" }
         if !state.running { return "事件监听尚未启动" }
-        return "正在监听右键手势与鼠标按键"
+        return "正在监听\(preferences.triggerTitle)手势与鼠标按键"
     }
 }

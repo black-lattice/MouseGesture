@@ -41,18 +41,18 @@ final class MouseButtonMonitor {
         let app = frontmostApplication()
         if type == .otherMouseDown {
             presses[number] = nil
-            guard preferences.enabled, !suspended, !preferences.excludes(app?.bundleIdentifier),
+            guard number != preferences.triggerButton, preferences.enabled, !suspended, !preferences.excludes(app?.bundleIdentifier),
                   let pid = app?.processIdentifier,
-                  let button = MouseButton.allCases.first(where: { preferences.mouseBinding(for: $0).buttonNumber == number }),
-                  preferences.mouseBinding(for: button).shortcut != nil else { return false }
-            presses[number] = Press(button: button, binding: preferences.mouseBinding(for: button),
+                  let button = MouseButton.allCases.first(where: { preferences.mouseBinding(for: $0, bundleID: app?.bundleIdentifier).buttonNumber == number }),
+                  preferences.mouseBinding(for: button, bundleID: app?.bundleIdentifier).shortcut != nil else { return false }
+            presses[number] = Press(button: button, binding: preferences.mouseBinding(for: button, bundleID: app?.bundleIdentifier),
                                     pid: pid, origin: event.location)
             return true
         }
         guard var press = presses[number] else { return false }
         if !preferences.enabled || suspended || app?.processIdentifier != press.pid
             || preferences.excludes(app?.bundleIdentifier)
-            || preferences.mouseBinding(for: press.button) != press.binding
+            || preferences.mouseBinding(for: press.button, bundleID: app?.bundleIdentifier) != press.binding
             || hypot(event.location.x - press.origin.x, event.location.y - press.origin.y) > 6 {
             press.cancelled = true
         }
@@ -68,7 +68,7 @@ final class MouseButtonMonitor {
             guard let self, self.generation == session, self.preferences.enabled, !self.suspended,
                   self.frontmostApplication()?.processIdentifier == press.pid,
                   !self.preferences.excludes(self.frontmostApplication()?.bundleIdentifier),
-                  self.preferences.mouseBinding(for: press.button) == press.binding else { return }
+                  self.preferences.mouseBinding(for: press.button, bundleID: self.frontmostApplication()?.bundleIdentifier) == press.binding else { return }
             self.onClick?(press.button, shortcut, press.pid)
         }
         return true

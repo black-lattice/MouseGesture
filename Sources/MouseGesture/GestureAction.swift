@@ -34,6 +34,7 @@ enum GestureAction: String, CaseIterable, Codable, Identifiable {
     case screenshotToolbar, screenshotFull, screenshotArea, screenshotFullClipboard, screenshotAreaClipboard
     case minimizeWindow, minimizeAllWindows, fullScreen, hideApp, hideOtherApps, nextWindow, previousWindow
     case appSettings, quitApp, newWindow
+    case windowLeft, windowRight, windowCenter, windowMaximize, windowNextDisplay
     case cut, copy, paste, pasteMatchingStyle, selectAll, undo, redo, find, findNext, findPrevious, openFile, save, printDocument
     case newTab, nextTab, previousTab, goBack, goForward, reloadPage, addressBar
     case newFolder, fileInfo, quickLook, parentFolder, goToFolder, downloadsFolder, desktopFolder, homeFolder, connectServer, moveToTrash
@@ -42,6 +43,7 @@ enum GestureAction: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
     var title: String { definition.title }
     var category: ActionCategory { definition.category }
+    var isWindowLayout: Bool { [.windowLeft, .windowRight, .windowCenter, .windowMaximize, .windowNextDisplay].contains(self) }
     var usesShortcut: Bool { definition.shortcut != nil }
     var requiresTargetWindow: Bool {
         switch self {
@@ -64,6 +66,11 @@ enum GestureAction: String, CaseIterable, Codable, Identifiable {
     // Fn/Globe-only, media, power and held-key sequences require separate implementations.
     private var definition: ActionDefinition {
         switch self {
+        case .windowLeft: return .init(title: "窗口左半屏", category: .windows, shortcut: nil)
+        case .windowRight: return .init(title: "窗口右半屏", category: .windows, shortcut: nil)
+        case .windowCenter: return .init(title: "窗口居中", category: .windows, shortcut: nil)
+        case .windowMaximize: return .init(title: "窗口最大化", category: .windows, shortcut: nil)
+        case .windowNextDisplay: return .init(title: "窗口移到另一块显示器", category: .windows, shortcut: nil)
         case .none: return .init(title: "不执行操作", category: .system, shortcut: nil)
         case .showDesktop: return .key("显示桌面", .system, 103, [], "F11")
         case .missionControl: return .key("调度中心", .system, 126, [.maskControl], "↑")

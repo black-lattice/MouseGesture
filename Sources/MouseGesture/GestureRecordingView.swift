@@ -11,9 +11,9 @@ struct GestureRecordingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("在下方区域按住右键绘制，松开预览，再点击保存。录制期间不执行任何手势操作。")
+            Text("在下方区域按住\(preferences.triggerTitle)绘制，松开预览，再点击保存。录制期间不执行任何手势操作。")
                 .font(.callout).foregroundStyle(.secondary)
-            GestureRecordingPad(minimumLength: preferences.minimumLength, onStart: {
+            GestureRecordingPad(minimumLength: preferences.minimumLength, triggerButton: preferences.triggerButton, onStart: {
                 candidate = nil
                 error = nil
             }, onComplete: { directions in
@@ -53,6 +53,7 @@ struct GestureRecordingView: View {
 
 struct GestureRecordingPad: NSViewRepresentable {
     let minimumLength: Double
+    var triggerButton: Int64 = 1
     let onStart: () -> Void
     let onComplete: ([Direction]?) -> Void
     let onCancel: () -> Void
@@ -61,6 +62,7 @@ struct GestureRecordingPad: NSViewRepresentable {
 
     func updateNSView(_ view: RecordingPadView, context: Context) {
         view.minimumLength = minimumLength
+        view.triggerButton = triggerButton
         view.onStart = onStart
         view.onComplete = onComplete
         view.onCancel = onCancel
@@ -69,6 +71,7 @@ struct GestureRecordingPad: NSViewRepresentable {
 
 final class RecordingPadView: NSView {
     var minimumLength: Double = 50
+    var triggerButton: Int64 = 1
     var onStart: (() -> Void)?
     var onComplete: (([Direction]?) -> Void)?
     var onCancel: (() -> Void)?
@@ -93,6 +96,19 @@ final class RecordingPadView: NSView {
         append(event)
         onComplete?(stroke?.recognize(minimumLength: minimumLength))
         needsDisplay = true
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        if event.buttonNumber == triggerButton { rightMouseDown(with: event) }
+        else { super.otherMouseDown(with: event) }
+    }
+    override func otherMouseDragged(with event: NSEvent) {
+        if event.buttonNumber == triggerButton { rightMouseDragged(with: event) }
+        else { super.otherMouseDragged(with: event) }
+    }
+    override func otherMouseUp(with event: NSEvent) {
+        if event.buttonNumber == triggerButton { rightMouseUp(with: event) }
+        else { super.otherMouseUp(with: event) }
     }
 
     override func keyDown(with event: NSEvent) {
