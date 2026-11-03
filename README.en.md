@@ -18,12 +18,11 @@ A live trail follows your gesture, and pausing shows the matching action. Releas
 | --- | --- |
 | <img src="docs/screenshots/show-desktop.png" alt="MouseGesture downward gesture: show desktop" width="300"> | <img src="docs/screenshots/close-tab.png" alt="MouseGesture gesture with a turn: close the current tab or document" width="480"> |
 
-<details>
-<summary>View status and mouse button settings</summary>
+### Settings
+
+Check listener status, choose the gesture drawing button, manage global or per-app configurations, and assign shortcuts to the middle and side buttons.
 
 <img src="docs/screenshots/settings.png" alt="MouseGesture settings: listener status, drawing button, configuration scope, and mouse buttons" width="840">
-
-</details>
 
 ## Features
 

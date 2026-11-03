@@ -18,12 +18,11 @@ MouseGesture 是原生 macOS 鼠标手势工具。按住右键画出一笔直线
 | --- | --- |
 | <img src="docs/screenshots/show-desktop.png" alt="MouseGesture 向下手势：显示桌面" width="300"> | <img src="docs/screenshots/close-tab.png" alt="MouseGesture 折线手势：关闭当前标签页或文稿" width="480"> |
 
-<details>
-<summary>查看运行状态与鼠标按键设置</summary>
+### 设置界面
+
+查看运行状态，选择手势绘制键，管理全局或应用专属配置，并为中键和侧键绑定快捷键。
 
 <img src="docs/screenshots/settings.png" alt="MouseGesture 设置：监听状态、绘制键、配置范围与鼠标按键" width="840">
-
-</details>
 
 ## 核心功能
 
