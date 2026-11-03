@@ -8,14 +8,20 @@ It is designed for Mac users who want mouse-driven shortcuts for desktops, windo
 
 ## Screenshots
 
-View actions, shortcuts, and gestures together. The screenshot shows example bindings; gestures must be recorded during initial setup.
+A live trail follows your gesture, and pausing shows the matching action. Release the drawing button to perform it. These screenshots show configured examples; gestures must be recorded during initial setup.
 
-<img src="docs/screenshots/gesture-bindings.jpg" alt="MouseGesture action list: custom shortcuts, system actions, and gesture bindings" width="840">
+**Draw right to switch to the desktop on the right.**
+
+<img src="docs/screenshots/switch-desktop-right.png" alt="MouseGesture rightward gesture: cyan trail and switch-to-right-desktop hint" width="840">
+
+| Draw down: show desktop | Draw down, then right: close the current tab or document |
+| --- | --- |
+| <img src="docs/screenshots/show-desktop.png" alt="MouseGesture downward gesture: show desktop" width="300"> | <img src="docs/screenshots/close-tab.png" alt="MouseGesture gesture with a turn: close the current tab or document" width="480"> |
 
 <details>
 <summary>View status and mouse button settings</summary>
 
-<img src="docs/screenshots/settings.jpg" alt="MouseGesture settings: listener status, drawing button, configuration scope, and mouse buttons" width="840">
+<img src="docs/screenshots/settings.png" alt="MouseGesture settings: listener status, drawing button, configuration scope, and mouse buttons" width="840">
 
 </details>
 

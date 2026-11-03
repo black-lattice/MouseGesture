@@ -8,14 +8,20 @@ MouseGesture 是原生 macOS 鼠标手势工具。按住右键画出一笔直线
 
 ## 界面预览
 
-在同一列表中查看功能、快捷键和手势。下图为配置示例，首次使用需要自行录制手势。
+绘制时显示实时轨迹，停顿时提示匹配的操作，松开执行。下图为已配置的手势示例，首次使用需要自行录制手势。
 
-<img src="docs/screenshots/gesture-bindings.jpg" alt="MouseGesture 功能列表：自定义快捷键、系统操作与手势绑定" width="840">
+**向右绘制，切换到右侧桌面。**
+
+<img src="docs/screenshots/switch-desktop-right.png" alt="MouseGesture 向右手势：青色轨迹与切换到右侧桌面提示" width="840">
+
+| 向下绘制：显示桌面 | 向下再向右绘制：关闭当前标签页 / 文稿 |
+| --- | --- |
+| <img src="docs/screenshots/show-desktop.png" alt="MouseGesture 向下手势：显示桌面" width="300"> | <img src="docs/screenshots/close-tab.png" alt="MouseGesture 折线手势：关闭当前标签页或文稿" width="480"> |
 
 <details>
 <summary>查看运行状态与鼠标按键设置</summary>
 
-<img src="docs/screenshots/settings.jpg" alt="MouseGesture 设置：监听状态、绘制键、配置范围与鼠标按键" width="840">
+<img src="docs/screenshots/settings.png" alt="MouseGesture 设置：监听状态、绘制键、配置范围与鼠标按键" width="840">
 
 </details>
 
