@@ -72,13 +72,17 @@ sed '/^import GestureCore$/d' Sources/MouseGesture/{GestureAction,CustomAction,M
 cat Tests/ShortcutCaptureTests.swift Tests/GestureRecordingTests.swift Tests/TrailLifecycleTests.swift Tests/TrailRenderingTests.swift Tests/PerformanceTests.swift Tests/MouseButtonTests.swift Tests/GestureTargetTests.swift Tests/GestureReliabilityTests.swift Tests/WindowLayoutTests.swift Tests/TriggerButtonTests.swift Tests/TrailStyleTests.swift >> "$CHECK_DIR/recording.swift"
 xcrun swift "$CHECK_DIR/recording.swift"
 
+swift package --scratch-path "$CHECK_DIR/swiftpm" resolve
+SPARKLE_FRAMEWORK=$(find "$CHECK_DIR/swiftpm/artifacts" -type d -name Sparkle.framework -print -quit)
+test -n "$SPARKLE_FRAMEWORK"
+
 for ARCH in x86_64 arm64; do
     mkdir -p "$CHECK_DIR/$ARCH"
     xcrun swiftc -swift-version 5 -sdk "$SDK_PATH" -target "$ARCH-apple-macosx13.0" \
         -emit-module -module-name GestureCore Sources/GestureCore/*.swift \
         -emit-module-path "$CHECK_DIR/$ARCH/GestureCore.swiftmodule"
     xcrun swiftc -swift-version 5 -sdk "$SDK_PATH" -target "$ARCH-apple-macosx13.0" \
-        -typecheck -I "$CHECK_DIR/$ARCH" Sources/MouseGesture/*.swift
+        -typecheck -I "$CHECK_DIR/$ARCH" -F "$(dirname "$SPARKLE_FRAMEWORK")" Sources/MouseGesture/*.swift
     echo "类型检查通过：$ARCH"
 done
 plutil -lint Resources/Info.plist

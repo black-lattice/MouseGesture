@@ -55,6 +55,8 @@ Check listener status, choose the gesture drawing button, manage global or per-a
 3. Allow MouseGesture in System Settings → Privacy & Security → Accessibility. Allow Input Monitoring too if macOS requests it.
 4. Return to settings and confirm that listening is active before configuring gestures.
 
+Starting with v0.3.1, choose **检查更新** (Check for Updates) from the MouseGesture menu bar icon, or allow Sparkle to check periodically. For a first install or an upgrade from v0.3.0 or earlier, install the universal package from GitHub Releases once.
+
 macOS may block builds without Apple notarization. After verifying the source, allow the app in Privacy & Security.
 
 ## Record your first gesture

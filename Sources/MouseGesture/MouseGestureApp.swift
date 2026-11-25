@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import Sparkle
 
 @main
 enum MouseGestureApp {
@@ -15,6 +16,8 @@ enum MouseGestureApp {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     private let state = AppState()
+    private var updater: SPUStandardUpdaterController?
+    private var availableVersion: String?
     private var statusItem: NSStatusItem?
     private var window: NSWindow?
     private var referenceWindow: NSWindow?
@@ -24,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "cursorarrow.motionlines", accessibilityDescription: "MouseGesture")
         statusItem = item
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: self)
+        }
         installMainMenu()
         state.preferences.$enabled.sink { [weak self] _ in
             DispatchQueue.main.async {
@@ -95,6 +101,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             exclude.representedObject = bundleID
         }
         menu.addItem(.separator())
+        if let updater {
+            let label = availableVersion.map { "更新到 v\($0)" } ?? "检查更新"
+            let check = menu.addItem(withTitle: label, action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
+            check.target = updater
+        }
         menu.addItem(withTitle: "退出 MouseGesture", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     }
 
@@ -151,4 +162,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationWillTerminate(_ notification: Notification) { state.stop() }
+}
+
+extension AppDelegate: SPUStandardUserDriverDelegate {
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
+        if !state.userInitiated {
+            availableVersion = update.displayVersionString
+        }
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        availableVersion = nil
+    }
 }

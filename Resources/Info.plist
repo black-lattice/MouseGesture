@@ -8,9 +8,13 @@
     <key>CFBundleExecutable</key><string>MouseGesture</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.3.0</string>
-    <key>CFBundleVersion</key><string>13</string>
+    <key>CFBundleShortVersionString</key><string>0.3.1</string>
+    <key>CFBundleVersion</key><string>14</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
+    <key>SUFeedURL</key><string>https://github.com/black-lattice/MouseGesture/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>pEk8u6pPKIZH88AlYyBjpSCzL3mI0B64PqdP5529rj8=</string>
+    <key>SURequireSignedFeed</key><true/>
+    <key>SUVerifyUpdateBeforeExtraction</key><true/>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSHumanReadableCopyright</key><string>Copyright © 2026 black-lattice. MIT License.</string>
